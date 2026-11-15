@@ -20,6 +20,11 @@
 # production
 /build
 
+# Prisma-generated client and local SQLite database
+/generated/prisma/
+/prisma/*.db
+/prisma/*.db-*
+
 # misc
 .DS_Store
 *.pem
