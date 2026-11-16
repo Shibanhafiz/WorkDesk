@@ -1,105 +1,82 @@
 WorkDesk
 
-A simple, organized workspace for managing tasks and projects.
+A simple workspace to organize projects, manage tasks, and track progress.
 
-WorkDesk is a task and project management application built with Next.js. It helps individuals organize their work, track deadlines, manage project progress, and understand their workload through a clean dashboard.
+WorkDesk is a lightweight project and task management application built with Next.js. It helps individuals organize their work, manage deadlines, prioritize tasks, and monitor project progress through a clean dashboard.
 
-The goal is to make everyday work easier to organize without unnecessary complexity.
+Overview
+
+WorkDesk brings project organization and task management together in one place. Projects can contain multiple tasks, while tasks can also remain unassigned when needed.
+
+The application uses a local SQLite database to persist tasks and projects.
 
 Features
 
 Dashboard
 
-- Overview of task and project activity
-- Task statistics and priority summaries
-- Recently updated tasks
-- Upcoming deadlines
+- View task statistics and recent tasks.
+- Monitor task status and priority.
+- See an overview of project and task activity.
 
 Task Management
 
-- Create, edit, and delete tasks
-- Set task priorities: Low, Medium, and High
-- Track task status: To Do, In Progress, and Done
-- Add descriptions and due dates
-- Search and filter tasks
-- Sort tasks and update their status quickly
-- Assign tasks to projects or leave them unassigned
+- Create, edit, and delete tasks.
+- Set task priorities: Low, Medium, and High.
+- Track task status: To Do, In Progress, and Done.
+- Add descriptions and due dates.
+- Search and filter tasks.
+- Sort tasks and update their status quickly.
+- Assign tasks to projects or leave them unassigned.
 
 Project Management
 
-- Create and edit projects
-- View individual project details
-- Track project task progress
-- Search, filter, and sort projects
-- Archive and restore projects
-- View project schedules and associated tasks
+- Create and edit projects.
+- View individual project details.
+- Track project schedules and task progress.
+- Search, filter, and sort projects.
+- Archive and restore projects.
 
 Upcoming Tasks
 
-- View overdue tasks
-- Identify tasks due soon
-- Separate later deadlines from undated tasks
+- View overdue tasks.
+- Identify tasks due today or within the next seven days.
+- Separate later deadlines from undated tasks.
 
 Analytics
 
-- View task status summaries
-- Understand task priority distribution
-- Generate insights from saved task data
+- View task status and priority summaries.
+- Review insights calculated from saved tasks.
 
 Settings
 
-- Light and dark appearance preferences
-- Display density controls
-- Default task priority
-- Delete confirmation preference
-- Custom display name
+- Change appearance and display density.
+- Set a default task priority.
+- Configure delete confirmation.
+- Set a display name.
 
-Settings are stored in browser local storage and do not currently sync between browsers or accounts.
+Preferences are stored in the browser's local storage and do not sync across browsers or devices.
 
 Technology Stack
 
-- Frontend: JavaScript, React, Next.js App Router
-- Styling: Tailwind CSS
-- Database: SQLite
-- ORM: Prisma ORM 7
-- Testing: Node.js test runner
-- Code Quality: ESLint
+Technology| Purpose
+JavaScript| Application logic
+Next.js| App framework and routing
+React| User interface
+Tailwind CSS| Styling
+Prisma ORM 7| Database access
+SQLite| Local database
+Node.js| Runtime
 
 Application Pages
 
-Route| Purpose
-"/"| Dashboard and workspace overview
-"/projects"| Project management
+Route| Description
+"/"| Dashboard and task overview
+"/tasks"| Create and manage tasks
+"/projects"| Manage projects
 "/projects/[id]"| Individual project details
-"/tasks"| Task management
 "/upcoming"| Upcoming and overdue tasks
 "/analytics"| Task analytics
 "/settings"| Application preferences
-
-Project Structure
-
-WorkDesk/
-├── app/
-│   ├── api/
-│   │   ├── projects/
-│   │   └── tasks/
-│   ├── components/
-│   ├── lib/
-│   ├── analytics/
-│   ├── projects/
-│   ├── settings/
-│   ├── tasks/
-│   ├── upcoming/
-│   ├── globals.css
-│   ├── layout.js
-│   └── page.js
-├── prisma/
-│   ├── migrations/
-│   └── schema.prisma
-├── public/
-├── tests/
-├── package.json
-└── README.md
 
 Getting Started
 
@@ -107,7 +84,6 @@ Prerequisites
 
 - Node.js 24 LTS or a newer supported release
 - npm
-- Git
 
 1. Clone the repository
 
@@ -118,107 +94,123 @@ cd WorkDesk
 
 npm install
 
-3. Initialize the database
+3. Set up the database
 
 npm run db:deploy
 
-This applies the committed Prisma migrations to the local SQLite database.
+This applies the committed Prisma migrations and prepares the local SQLite database.
 
 4. Start the development server
 
 npm run dev
 
-Open:
+Open your browser and visit:
 
 http://localhost:3000
 
-Available Commands
+The development command generates Prisma Client before starting Next.js.
 
-Command| Description
-"npm run dev"| Start development server
-"npm run build"| Create production build
-"npm start"| Start production server
-"npm test"| Run automated tests
-"npm run lint"| Run ESLint
-"npm run db:generate"| Generate Prisma Client
-"npm run db:migrate"| Create and apply a development migration
-"npm run db:deploy"| Apply committed migrations
-"npm run db:studio"| Open Prisma Studio
+Database & Architecture
 
-How It Works
+WorkDesk uses SQLite for local data storage and Prisma ORM for database operations.
 
-WorkDesk uses a simple application architecture:
+The application follows this flow:
 
-1. The user interacts with the Next.js interface.
-2. React components manage user interactions and application state.
-3. The frontend sends requests to Next.js API routes.
-4. API routes validate incoming data.
-5. Prisma Client communicates with the SQLite database.
-6. Saved data is returned to the interface and displayed.
+User Interface (Next.js / React)
+              |
+              v
+       API Route Handlers
+              |
+              v
+         Prisma ORM
+              |
+              v
+          SQLite
 
-The browser communicates with the API rather than accessing the database directly.
+Data Model
 
-Database Design
+- Project: Stores project information, status, and schedule.
+- Task: Stores task details, priority, status, and due date.
+- Relationship: A project can contain multiple tasks. A task can belong to one project or remain unassigned.
 
-WorkDesk currently uses two main database models:
+Project archiving changes its status without deleting its tasks. The application does not currently provide permanent project deletion.
 
-- Task: Stores task information, priority, status, due date, and timestamps.
-- Project: Stores project information, status, descriptions, and scheduling details.
+Database Location
 
-A project can contain multiple tasks. A task can belong to one project or remain unassigned.
+The local database is stored at:
 
-Project archiving preserves its associated tasks.
+prisma/workdesk.db
 
-Testing
+The database file is excluded from Git.
 
-Run the following commands before submitting changes:
+When modifying "prisma/schema.prisma", create a development migration:
+
+npm run db:migrate -- --name describe_your_change
+
+For an existing deployment, apply committed migrations with:
+
+npm run db:deploy
+
+API Overview
+
+Method| Endpoint| Purpose
+GET| "/api/tasks"| Retrieve tasks
+POST| "/api/tasks"| Create a task
+PATCH| "/api/tasks/[id]"| Update a task
+DELETE| "/api/tasks/[id]"| Delete a task
+GET| "/api/projects"| Retrieve projects
+POST| "/api/projects"| Create a project
+GET| "/api/projects/[id]"| Retrieve project details
+PATCH| "/api/projects/[id]"| Update a project
+
+Task and project request data are validated on the server before database operations.
+
+Validation & Testing
+
+WorkDesk includes validation for task and project data, along with focused tests for input validation and task insights.
+
+Run the available checks:
 
 npm test
 npm run lint
 npm run build
 
-The project includes tests for task validation, task insights, project validation, and project insights.
+Project Structure
+
+workdesk/
+├── app/
+│   ├── api/
+│   ├── components/
+│   ├── lib/
+│   ├── projects/
+│   ├── analytics/
+│   ├── settings/
+│   ├── upcoming/
+│   ├── tasks/
+│   ├── globals.css
+│   ├── layout.js
+│   └── page.js
+├── prisma/
+│   ├── migrations/
+│   └── schema.prisma
+├── public/
+├── tests/
+├── package.json
+├── prisma.config.mjs
+└── README.md
 
 Current Limitations
 
-WorkDesk is currently a local development project.
+- No user accounts or authentication.
+- No cloud database or cross-device synchronization.
+- Application preferences are browser-local.
+- SQLite requires durable, writable storage when deployed.
+- Permanent project deletion is not available in the application.
 
-- No user registration or authentication.
-- No multi-user collaboration or shared workspaces.
-- Preferences are stored locally in the browser.
-- SQLite is configured for local development.
-- Production deployment requires persistent database storage and appropriate migration setup.
+About the Project
 
-These capabilities are not currently advertised as implemented features.
+WorkDesk is a personal development project focused on building a practical full-stack application while learning modern JavaScript, React, Next.js, API development, and database integration.
 
-Future Improvements
+Repository: "github.com/Shibanhafiz/WorkDesk" (https://github.com/Shibanhafiz/WorkDesk)
 
-Potential future development includes:
-
-- User authentication and individual workspaces
-- Shared projects and team collaboration
-- Cloud database support
-- Notifications and reminders
-- File attachments
-- Calendar integration
-- Production deployment
-
-Contributing
-
-Contributions, suggestions, and bug reports are welcome.
-
-1. Fork the repository.
-2. Create a feature branch.
-3. Make your changes.
-4. Run the tests and lint checks.
-5. Submit a pull request.
-
-Author
-
-Shiban Hafiz
-
-- GitHub: https://github.com/Shibanhafiz
-
-License
-
-No license has been specified yet. All rights are reserved unless a license is added to this repository.
+Developed by "Shiban Hafiz" (https://github.com/Shibanhafiz)
