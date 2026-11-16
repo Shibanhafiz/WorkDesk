@@ -1,3 +1,15 @@
+import Dialog from "./Dialog";
+import Link from "next/link";
+
+const statusLabels = {
+  TODO: "To do",
+  "To Do": "To do",
+  IN_PROGRESS: "In progress",
+  "In Progress": "In progress",
+  DONE: "Completed",
+  Completed: "Completed",
+};
+
 function formatDate(value) {
   if (!value) {
     return "Not set";
@@ -21,68 +33,62 @@ function formatTimestamp(value) {
 
 export default function TaskDetailsDialog({ task, onClose }) {
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center overflow-y-auto bg-slate-950/40 p-4">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="task-details-heading"
-        className="my-auto w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Task details
-            </p>
-            <h2
-              id="task-details-heading"
-              className="mt-1 wrap-anywhere text-xl font-semibold text-slate-900"
-            >
-              {task.title}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close task details"
-            className="rounded-md px-2 py-1 text-sm font-medium text-slate-500 hover:bg-slate-100"
-          >
-            Close
-          </button>
+    <Dialog labelledBy="task-details-heading" onClose={onClose}>
+      <header className="dialog-top-row">
+        <div className="task-record-main">
+          <p className="section-kicker">TASK REGISTER / RECORD</p>
+          <h2 id="task-details-heading" className="dialog-heading">
+            {task.title}
+          </h2>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close task details"
+          className="dialog-close"
+        >
+          Close
+        </button>
+      </header>
 
-        <p className="mt-5 wrap-anywhere whitespace-pre-wrap text-sm leading-6 text-slate-600">
-          {task.description || "No description provided."}
-        </p>
+      <p className="details-copy">
+        {task.description || "No description provided."}
+      </p>
 
-        <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-slate-200 pt-5 text-sm">
-          <div>
-            <dt className="text-slate-500">Status</dt>
-            <dd className="mt-1 font-medium text-slate-900">{task.status}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Priority</dt>
-            <dd className="mt-1 font-medium text-slate-900">{task.priority}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Due date</dt>
-            <dd className="mt-1 font-medium text-slate-900">
-              {formatDate(task.dueDate)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-slate-500">Created</dt>
-            <dd className="mt-1 font-medium text-slate-900">
-              {formatTimestamp(task.createdAt)}
-            </dd>
-          </div>
-          <div className="col-span-2">
-            <dt className="text-slate-500">Last updated</dt>
-            <dd className="mt-1 font-medium text-slate-900">
-              {formatTimestamp(task.updatedAt)}
-            </dd>
-          </div>
-        </dl>
-      </section>
-    </div>
+      <dl className="details-list">
+        <div>
+          <dt>Status</dt>
+          <dd>{statusLabels[task.status] ?? task.status}</dd>
+        </div>
+        <div>
+          <dt>Priority</dt>
+          <dd>{task.priority}</dd>
+        </div>
+        <div>
+          <dt>Due date</dt>
+          <dd>{formatDate(task.dueDate)}</dd>
+        </div>
+        <div>
+          <dt>Project</dt>
+          <dd>
+            {task.project ? (
+              <Link href={`/projects/${task.project.id}`} className="task-link">
+                {task.project.name}
+              </Link>
+            ) : (
+              "Unassigned"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Created</dt>
+          <dd>{formatTimestamp(task.createdAt)}</dd>
+        </div>
+        <div className="details-wide">
+          <dt>Last updated</dt>
+          <dd>{formatTimestamp(task.updatedAt)}</dd>
+        </div>
+      </dl>
+    </Dialog>
   );
 }

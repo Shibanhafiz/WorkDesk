@@ -25,9 +25,24 @@ export async function PATCH(request, { params }) {
   }
 
   try {
+    if (validation.data.projectId) {
+      const project = await prisma.project.findUnique({
+        where: { id: validation.data.projectId },
+        select: { id: true },
+      });
+      if (!project) {
+        return errorResponse("Project not found.", 404);
+      }
+    }
+
     const task = await prisma.task.update({
       where: { id },
       data: validation.data,
+      include: {
+        project: {
+          select: { id: true, name: true, status: true },
+        },
+      },
     });
 
     return Response.json(task);

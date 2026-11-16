@@ -1,43 +1,46 @@
 "use client";
 
+import PageHeader from "../components/PageHeader";
 import StatCard from "../components/StatCard";
 import TaskLoadState from "../components/TaskLoadState";
 import { useTasks } from "../lib/useTasks";
 import { calculateTaskMetrics } from "../lib/taskInsights";
 
 const statusItems = [
-  { value: "TODO", label: "To do", color: "bg-slate-500" },
-  { value: "IN_PROGRESS", label: "In progress", color: "bg-blue-600" },
-  { value: "DONE", label: "Completed", color: "bg-emerald-600" },
+  { value: "TODO", label: "To do", tone: "status-todo" },
+  { value: "IN_PROGRESS", label: "In progress", tone: "status-in-progress" },
+  { value: "DONE", label: "Completed", tone: "status-done" },
 ];
 
 const priorityItems = [
-  { value: "LOW", label: "Low", color: "bg-slate-500" },
-  { value: "MEDIUM", label: "Medium", color: "bg-amber-500" },
-  { value: "HIGH", label: "High", color: "bg-rose-500" },
+  { value: "LOW", label: "Low", tone: "priority-low" },
+  { value: "MEDIUM", label: "Medium", tone: "priority-medium" },
+  { value: "HIGH", label: "High", tone: "priority-high" },
 ];
 
-function DistributionPanel({ heading, items, counts, total }) {
+function DistributionPanel({ number, heading, items, counts, total }) {
   return (
-    <section
-      aria-label={`${heading} distribution`}
-      className="density-card rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40"
-    >
-      <h2 className="text-lg font-semibold text-slate-900">{heading}</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Counts come from the current task list.
-      </p>
-      <div className="mt-6 space-y-5">
+    <section aria-label={`${heading} distribution`} className="section-block">
+      <div className="section-heading-row">
+        <div>
+          <p className="section-kicker">{number} / DISTRIBUTION</p>
+          <h2 className="section-title">{heading}</h2>
+          <p className="section-description">
+            Counts come from the current task list.
+          </p>
+        </div>
+      </div>
+      <div className="distribution-list">
         {items.map((item) => {
           const count = counts[item.value];
           const percentage = total ? Math.round((count / total) * 100) : 0;
 
           return (
-            <div key={item.value}>
-              <div className="mb-2 flex items-center justify-between gap-3 text-sm">
-                <span className="font-medium text-slate-700">{item.label}</span>
-                <span className="text-slate-500">
-                  {count} ({percentage}%)
+            <div key={item.value} className="distribution-row">
+              <div className="distribution-copy">
+                <strong>{item.label}</strong>
+                <span className="distribution-count">
+                  {count} · {percentage}%
                 </span>
               </div>
               <div
@@ -46,10 +49,10 @@ function DistributionPanel({ heading, items, counts, total }) {
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={percentage}
-                className="h-2 overflow-hidden rounded-full bg-slate-100"
+                className="progress-track"
               >
                 <div
-                  className={`h-full rounded-full ${item.color}`}
+                  className={`progress-fill ${item.tone}`}
                   style={{ width: `${percentage}%` }}
                 />
               </div>
@@ -64,66 +67,76 @@ function DistributionPanel({ heading, items, counts, total }) {
 export default function AnalyticsPage() {
   const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks();
   const metrics = calculateTaskMetrics(tasks, todayDateKey);
+  const stats = [
+    {
+      label: "Total tasks",
+      value: metrics.total,
+      detail: "Saved in this workspace",
+    },
+    {
+      label: "Completed",
+      value: metrics.completed,
+      detail: "Marked complete",
+    },
+    {
+      label: "Pending",
+      value: metrics.total - metrics.completed,
+      detail: "To do or in progress",
+    },
+    {
+      label: "Completion",
+      value: `${metrics.completionPercentage}%`,
+      detail: "Of all recorded tasks",
+    },
+  ];
 
   return (
-    <div className="px-5 py-7 sm:px-8 lg:px-10 lg:py-10">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Workspace
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-            Analytics
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            A live summary of tasks saved in your workspace.
-          </p>
-        </header>
+    <div className="page-frame">
+      <PageHeader
+        number="05"
+        title="Analytics"
+        description="A measured summary of task status and priority across the workspace."
+        meta="LIVE SUMMARY · DATABASE-BACKED TASKS"
+      />
 
-        <TaskLoadState
-          isLoading={isLoading}
-          error={error}
-          onRetry={reloadTasks}
-        >
-          {tasks.length === 0 ? (
-            <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              No task data is available yet. Create a task to populate these
-              summaries.
-            </div>
-          ) : null}
-          <div className="density-grid mb-6 grid gap-4 sm:grid-cols-2">
+      <TaskLoadState
+        isLoading={isLoading}
+        error={error}
+        onRetry={reloadTasks}
+      >
+        <section aria-label="Task totals" className="metric-grid">
+          {stats.map((stat, index) => (
             <StatCard
-              label="Total tasks"
-              value={metrics.total}
-              detail="Database-backed records"
-              accent
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              detail={stat.detail}
+              accent={index === 0 || index === 3}
             />
-            <StatCard
-              label="Completed"
-              value={`${metrics.completionPercentage}%`}
-              detail={`${metrics.completed} completed task${metrics.completed === 1 ? "" : "s"}`}
-            />
-          </div>
-          <div className="density-grid grid gap-6 xl:grid-cols-2">
-            <DistributionPanel
-              heading="Task distribution by status"
-              items={statusItems}
-              counts={{
-                TODO: metrics.todo,
-                IN_PROGRESS: metrics.inProgress,
-                DONE: metrics.completed,
-              }}
-              total={metrics.total}
-            />
-            <DistributionPanel
-              heading="Task distribution by priority"
-              items={priorityItems}
-              counts={metrics.priorities}
-              total={metrics.total}
-            />
-          </div>
-        </TaskLoadState>
-      </div>
+          ))}
+        </section>
+
+        <div className="analytics-grid">
+          <DistributionPanel
+            number="01"
+            heading="Status distribution"
+            items={statusItems}
+            counts={{
+              TODO: metrics.todo,
+              IN_PROGRESS: metrics.inProgress,
+              DONE: metrics.completed,
+            }}
+            total={metrics.total}
+          />
+          <DistributionPanel
+            number="02"
+            heading="Priority distribution"
+            items={priorityItems}
+            counts={metrics.priorities}
+            total={metrics.total}
+          />
+        </div>
+      </TaskLoadState>
     </div>
   );
 }

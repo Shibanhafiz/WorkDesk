@@ -61,8 +61,29 @@ test("groups due dates in order and keeps undated tasks separate", () => {
   const groups = groupTasksByDueDate(tasks, "2026-11-15");
 
   assert.deepEqual(groups.overdue.map((task) => task.id), ["overdue"]);
-  assert.deepEqual(groups.upcoming.map((task) => task.id), ["upcoming"]);
+  assert.deepEqual(groups.dueSoon.map((task) => task.id), ["upcoming"]);
+  assert.deepEqual(groups.upcoming, []);
   assert.deepEqual(groups.unscheduled.map((task) => task.id), ["unscheduled"]);
+});
+
+test("separates the next seven days from later deadlines", () => {
+  const grouped = groupTasksByDueDate(
+    [
+      { id: "today", status: "TODO", dueDate: "2026-11-15" },
+      { id: "last-day", status: "IN_PROGRESS", dueDate: "2026-11-22" },
+      { id: "later", status: "TODO", dueDate: "2026-11-23" },
+    ],
+    "2026-11-15",
+  );
+
+  assert.deepEqual(
+    grouped.dueSoon.map((task) => task.id),
+    ["today", "last-day"],
+  );
+  assert.deepEqual(
+    grouped.upcoming.map((task) => task.id),
+    ["later"],
+  );
 });
 
 test("sorts tasks by due date, priority, and creation time", () => {
@@ -83,6 +104,23 @@ test("sorts tasks by due date, priority, and creation time", () => {
       "upcoming",
       "overdue",
     ],
+  );
+});
+
+test("sorts both API priority enums and task-page labels", () => {
+  const displayTasks = [
+    { id: "low", priority: "Low" },
+    { id: "high", priority: "High" },
+    { id: "medium", priority: "Medium" },
+  ];
+
+  assert.deepEqual(
+    sortTasks(displayTasks, "priority-high").map((task) => task.id),
+    ["high", "medium", "low"],
+  );
+  assert.deepEqual(
+    sortTasks(displayTasks, "priority-low").map((task) => task.id),
+    ["low", "medium", "high"],
   );
 });
 

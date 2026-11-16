@@ -44,3 +44,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Windows system files
+desktop.ini
+Thumbs.db
+
+# Local environment
+.env
+.env.*
+!.env.example

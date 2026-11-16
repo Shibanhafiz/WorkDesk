@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePreferences } from "./PreferencesProvider";
+import PageHeader from "./PageHeader";
 import TaskCard from "./TaskCard";
 import TaskDetailsDialog from "./TaskDetailsDialog";
 import TaskForm from "./TaskForm";
 import { sortTasks } from "../lib/taskInsights";
+import { useProjects } from "../lib/useProjects";
 
 const taskStatuses = ["To Do", "In Progress", "Completed"];
 const taskPriorities = ["High", "Medium", "Low"];
@@ -61,12 +63,23 @@ async function fetchTaskList() {
   return data.map(fromApiTask);
 }
 
-export default function TaskManagement() {
+export default function TaskManagement({
+  scopedProjectId = null,
+  scopedProjectName = "",
+  embedded = false,
+  onTaskChange,
+}) {
   const { preferences } = usePreferences();
+  const {
+    projects,
+    error: projectsError,
+    reloadProjects,
+  } = useProjects();
   const [tasks, setTasks] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All statuses");
   const [priorityFilter, setPriorityFilter] = useState("All priorities");
+  const [projectFilter, setProjectFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -119,27 +132,41 @@ export default function TaskManagement() {
     };
   }, []);
 
+  const scopedTasks = scopedProjectId
+    ? tasks.filter((task) => task.projectId === scopedProjectId)
+    : tasks;
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filteredTasks = tasks.filter((task) => {
-    const matchesTitle = task.title.toLowerCase().includes(normalizedSearch);
+  const filteredTasks = scopedTasks.filter((task) => {
+    const matchesSearch =
+      task.title.toLowerCase().includes(normalizedSearch) ||
+      task.description.toLowerCase().includes(normalizedSearch);
     const matchesStatus =
       statusFilter === "All statuses" || task.status === statusFilter;
     const matchesPriority =
       priorityFilter === "All priorities" || task.priority === priorityFilter;
+    const matchesProject =
+      scopedProjectId ||
+      projectFilter === "all" ||
+      (projectFilter === "unassigned"
+        ? !task.projectId
+        : task.projectId === projectFilter);
 
-    return matchesTitle && matchesStatus && matchesPriority;
+    return matchesSearch && matchesStatus && matchesPriority && matchesProject;
   });
   const visibleTasks = sortTasks(filteredTasks, sortOrder);
+  const hasNoScopedTasks = scopedTasks.length === 0;
   const hasActiveFilters =
     searchTerm !== "" ||
     statusFilter !== "All statuses" ||
     priorityFilter !== "All priorities" ||
+    (!scopedProjectId && projectFilter !== "all") ||
     sortOrder !== "newest";
 
   function clearFilters() {
     setSearchTerm("");
     setStatusFilter("All statuses");
     setPriorityFilter("All priorities");
+    setProjectFilter("all");
     setSortOrder("newest");
   }
 
@@ -189,6 +216,7 @@ export default function TaskManagement() {
         type: "success",
         message: isEditing ? "Task updated." : "Task created.",
       });
+      onTaskChange?.();
       setIsTaskFormOpen(false);
       setEditingTask(null);
     } catch (error) {
@@ -219,6 +247,7 @@ export default function TaskManagement() {
         currentTasks.filter((currentTask) => currentTask.id !== task.id),
       );
       setFeedback({ type: "success", message: "Task deleted." });
+      onTaskChange?.();
     } catch (error) {
       setFeedback({
         type: "error",
@@ -248,6 +277,7 @@ export default function TaskManagement() {
         ),
       );
       setFeedback({ type: "success", message: "Task status updated." });
+      onTaskChange?.();
     } catch (error) {
       setFeedback({
         type: "error",
@@ -262,195 +292,240 @@ export default function TaskManagement() {
   }
 
   return (
-    <div className="px-5 py-7 sm:px-8 lg:px-10 lg:py-10">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className={`page-frame${embedded ? " task-management-embedded" : ""}`}>
+      {embedded ? (
+        <div className="section-heading-row embedded-task-heading">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Workspace
-            </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              All Tasks
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Search, organize, and update your tasks.
+            <p className="section-kicker">PROJECT / TASK REGISTER</p>
+            <h2 className="section-title">Project tasks</h2>
+            <p className="section-description">
+              Showing {scopedTasks.length} {scopedTasks.length === 1 ? "task" : "tasks"}.
             </p>
           </div>
           <button
             type="button"
             onClick={openNewTaskForm}
-            className="inline-flex h-11 items-center justify-center gap-2 self-start rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:self-auto"
+            className="button-primary"
           >
-            <span aria-hidden="true" className="text-lg leading-none">+</span>
-            Add Task
+            <span aria-hidden="true">+</span>
+            Add task
           </button>
-        </header>
-
-        {feedback && (
-          <div
-            role={feedback.type === "error" ? "alert" : "status"}
-            className={`mb-5 rounded-lg border px-4 py-3 text-sm ${
-              feedback.type === "error"
-                ? "border-rose-200 bg-rose-50 text-rose-800"
-                : "border-emerald-200 bg-emerald-50 text-emerald-800"
-            }`}
-          >
-            {feedback.message}
-          </div>
-        )}
-
-        <section aria-labelledby="tasks-heading">
-          <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <h2
-                id="tasks-heading"
-                className="text-xl font-semibold tracking-tight text-slate-900"
-              >
-                Tasks
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Showing {visibleTasks.length} of {tasks.length} tasks
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:w-[min(100%,900px)] xl:grid-cols-4">
-              <label className="relative block">
-                <span className="sr-only">Search tasks by title</span>
-                <input
-                  type="search"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search tasks..."
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-3 focus:ring-blue-100"
-                />
-              </label>
-
-              <label className="block">
-                <span className="sr-only">Filter tasks by status</span>
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-3 focus:ring-blue-100"
-                >
-                  <option>All statuses</option>
-                  {taskStatuses.map((status) => (
-                    <option key={status}>{status}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="sr-only">Filter tasks by priority</span>
-                <select
-                  value={priorityFilter}
-                  onChange={(event) => setPriorityFilter(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-3 focus:ring-blue-100"
-                >
-                  <option>All priorities</option>
-                  {taskPriorities.map((priority) => (
-                    <option key={priority}>{priority}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="sr-only">Sort tasks</span>
-                <select
-                  value={sortOrder}
-                  onChange={(event) => setSortOrder(event.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-3 focus:ring-blue-100"
-                >
-                  <option value="newest">Newest first</option>
-                  <option value="oldest">Oldest first</option>
-                  <option value="due-date">Due date (earliest)</option>
-                  <option value="priority-high">Priority (high to low)</option>
-                  <option value="priority-low">Priority (low to high)</option>
-                </select>
-              </label>
-            </div>
-          </div>
-
-          {hasActiveFilters && (
+        </div>
+      ) : (
+        <PageHeader
+          number="03"
+          title="All Tasks"
+          description="A searchable register for the work in your workspace."
+          meta={`${tasks.length} ${tasks.length === 1 ? "RECORD" : "RECORDS"} · TITLE, STATUS, PRIORITY`}
+          action={
             <button
               type="button"
-              onClick={clearFilters}
-              className="mb-4 text-sm font-semibold text-blue-700 underline underline-offset-2 hover:text-blue-800"
+              onClick={openNewTaskForm}
+              className="button-primary"
             >
-              Clear filters
+              <span aria-hidden="true">+</span>
+              Add task
             </button>
-          )}
+          }
+        />
+      )}
 
-          {isLoading ? (
-            <p
-              role="status"
-              className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500"
-            >
-              Loading tasks...
+      {feedback && (
+        <div
+          role={feedback.type === "error" ? "alert" : "status"}
+          className={`feedback${feedback.type === "error" ? " feedback-error" : ""}`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      <section aria-labelledby="tasks-heading">
+        <div className="section-heading-row">
+          <div>
+            <p className="section-kicker">01 / REGISTER</p>
+            <h2 id="tasks-heading" className="section-title">
+              Task register
+            </h2>
+            <p className="section-description">
+              Showing {visibleTasks.length} of {scopedTasks.length} tasks
             </p>
-          ) : loadError ? (
-            <div className="rounded-xl border border-rose-200 bg-white px-6 py-12 text-center">
-              <p className="text-sm text-slate-600">
-                Tasks could not be loaded. {loadError}
-              </p>
+          </div>
+        </div>
+
+        <div className={`task-toolbar${scopedProjectId ? " task-toolbar-scoped" : ""}`}>
+          <label>
+            <span className="sr-only">
+              Search tasks by title or description
+            </span>
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search tasks"
+              className="form-control"
+            />
+          </label>
+
+          <label>
+            <span className="sr-only">Filter tasks by status</span>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="form-control"
+            >
+              <option>All statuses</option>
+              {taskStatuses.map((status) => (
+                <option key={status}>{status}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span className="sr-only">Filter tasks by priority</span>
+            <select
+              value={priorityFilter}
+              onChange={(event) => setPriorityFilter(event.target.value)}
+              className="form-control"
+            >
+              <option>All priorities</option>
+              {taskPriorities.map((priority) => (
+                <option key={priority}>{priority}</option>
+              ))}
+            </select>
+          </label>
+
+          {!scopedProjectId ? (
+            <label>
+              <span className="sr-only">Filter tasks by project</span>
+              <select
+                value={projectFilter}
+                onChange={(event) => setProjectFilter(event.target.value)}
+                className="form-control"
+              >
+                <option value="all">All projects</option>
+                <option value="unassigned">Unassigned</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          <label>
+            <span className="sr-only">Sort tasks</span>
+            <select
+              value={sortOrder}
+              onChange={(event) => setSortOrder(event.target.value)}
+              className="form-control"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="due-date">Due date (earliest)</option>
+              <option value="priority-high">Priority (high to low)</option>
+              <option value="priority-low">Priority (low to high)</option>
+            </select>
+          </label>
+        </div>
+
+        {projectsError && !isLoading ? (
+          <p role="alert" className="feedback feedback-error">
+            Project filters and assignments are unavailable. {projectsError}{" "}
+            <button
+              type="button"
+              onClick={reloadProjects}
+              className="text-link-button"
+            >
+              Try again
+            </button>
+          </p>
+        ) : null}
+
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="text-link-button"
+          >
+            Clear filters
+          </button>
+        )}
+
+        {isLoading ? (
+          <p role="status" className="state-panel">
+            Loading your task register...
+          </p>
+        ) : loadError ? (
+          <div className="state-panel">
+            <p role="alert" className="state-error">
+              Tasks could not be loaded. {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={loadTasks}
+              className="text-link-button"
+            >
+              Try again
+            </button>
+          </div>
+        ) : visibleTasks.length > 0 ? (
+          <div className="task-register">
+            {visibleTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                statuses={taskStatuses}
+                onEdit={openEditTaskForm}
+                onViewTask={setViewingTask}
+                onDelete={deleteTask}
+                onStatusChange={changeTaskStatus}
+                isBusy={busyTaskId === task.id}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <h3 className="empty-state-title">
+              {hasNoScopedTasks ? "No tasks yet" : "No tasks match these filters"}
+            </h3>
+            <p className="empty-state-copy">
+              {hasNoScopedTasks
+                ? scopedProjectId
+                  ? "Add a task to start organizing this project."
+                  : "Add a task to start organizing your work."
+                : "Clear the filters or try a different search."}
+            </p>
+            {hasNoScopedTasks ? (
               <button
                 type="button"
-                onClick={loadTasks}
-                className="mt-3 text-sm font-semibold text-blue-700 hover:text-blue-800"
+                onClick={openNewTaskForm}
+                className="button-primary empty-state-action"
               >
-                Try again
+                Create your first task
               </button>
-            </div>
-          ) : visibleTasks.length > 0 ? (
-            <div className="density-grid grid gap-4 xl:grid-cols-2">
-              {visibleTasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  statuses={taskStatuses}
-                  onEdit={openEditTaskForm}
-                  onViewTask={setViewingTask}
-                  onDelete={deleteTask}
-                  onStatusChange={changeTaskStatus}
-                  isBusy={busyTaskId === task.id}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="density-card rounded-xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-              <h3 className="font-semibold text-slate-800">
-                {tasks.length === 0 ? "No tasks yet" : "No tasks match these filters"}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {tasks.length === 0
-                  ? "Add a task to start organizing your work."
-                  : "Clear the filters or try a different search."}
-              </p>
-              {tasks.length === 0 ? (
-                <button
-                  type="button"
-                  onClick={openNewTaskForm}
-                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-                >
-                  Create your first task
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="mt-4 text-sm font-semibold text-blue-700 underline underline-offset-2"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-      </div>
+            ) : (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-link-button empty-state-action-secondary"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+      </section>
 
       {isTaskFormOpen && (
         <TaskForm
           key={editingTask ? editingTask.id : "new-task"}
           initialTask={editingTask}
+          projects={projects}
+          projectsError={projectsError}
+          onReloadProjects={reloadProjects}
+          defaultProjectId={scopedProjectId}
+          defaultProjectName={scopedProjectName}
           defaultPriority={preferences.defaultPriority}
           onSave={saveTask}
           errorMessage={taskFormError}

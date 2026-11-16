@@ -8,23 +8,23 @@ export default function TaskLoadState({
     return (
       <p
         role="status"
-        className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500"
+        className="state-panel"
       >
-        Loading tasks...
+        Loading your task register…
       </p>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-rose-200 bg-white px-6 py-12 text-center">
-        <p role="alert" className="text-sm text-slate-600">
+      <div className="state-panel">
+        <p role="alert" className="state-error">
           Tasks could not be loaded. {error}
         </p>
         <button
           type="button"
           onClick={onRetry}
-          className="mt-3 text-sm font-semibold text-blue-700 hover:text-blue-800"
+          className="text-link-button"
         >
           Try again
         </button>

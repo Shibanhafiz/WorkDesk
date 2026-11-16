@@ -26,9 +26,9 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full">
         <PreferencesProvider>
-          <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 lg:flex-row">
+          <div className="workspace-layout">
             <Sidebar />
-            <main className="min-w-0 flex-1">{children}</main>
+            <main className="workspace-main">{children}</main>
           </div>
         </PreferencesProvider>
       </body>

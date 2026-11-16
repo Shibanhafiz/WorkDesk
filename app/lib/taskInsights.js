@@ -9,6 +9,11 @@ function getDueDateKey(task) {
   return task.dueDate ? task.dueDate.slice(0, 10) : null;
 }
 
+function getPriorityRank(priority) {
+  const priorityKey = typeof priority === "string" ? priority.toUpperCase() : "";
+  return priorityOrder[priorityKey] ?? 0;
+}
+
 function sortByDueDate(tasks) {
   return [...tasks].sort((first, second) => {
     const firstDate = getDueDateKey(first);
@@ -55,6 +60,14 @@ export function groupTasksByDueDate(tasks, today) {
   const datedOpenTasks = tasks.filter(
     (task) => task.dueDate && task.status !== "DONE",
   );
+  const dueSoonThrough = today
+    ? new Date(`${today}T00:00:00`)
+    : null;
+
+  dueSoonThrough?.setDate(dueSoonThrough.getDate() + 7);
+  const dueSoonDateKey = dueSoonThrough
+    ? getTodayDateKey(dueSoonThrough)
+    : null;
 
   return {
     overdue: today
@@ -62,9 +75,20 @@ export function groupTasksByDueDate(tasks, today) {
           datedOpenTasks.filter((task) => getDueDateKey(task) < today),
         )
       : [],
+    dueSoon: today
+      ? sortByDueDate(
+          datedOpenTasks.filter(
+            (task) =>
+              getDueDateKey(task) >= today &&
+              getDueDateKey(task) <= dueSoonDateKey,
+          ),
+        )
+      : [],
     upcoming: today
       ? sortByDueDate(
-          datedOpenTasks.filter((task) => getDueDateKey(task) >= today),
+          datedOpenTasks.filter(
+            (task) => getDueDateKey(task) > dueSoonDateKey,
+          ),
         )
       : [],
     unscheduled: tasks.filter((task) => !task.dueDate),
@@ -86,12 +110,12 @@ export function sortTasks(tasks, sortOrder) {
     case "priority-high":
       return sortedTasks.sort(
         (first, second) =>
-          priorityOrder[second.priority] - priorityOrder[first.priority],
+          getPriorityRank(second.priority) - getPriorityRank(first.priority),
       );
     case "priority-low":
       return sortedTasks.sort(
         (first, second) =>
-          priorityOrder[first.priority] - priorityOrder[second.priority],
+          getPriorityRank(first.priority) - getPriorityRank(second.priority),
       );
     case "newest":
     default:

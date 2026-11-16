@@ -84,3 +84,17 @@ test("accepts CUID-format task IDs and rejects malformed IDs", () => {
   assert.equal(isValidTaskId("not-a-cuid"), false);
   assert.equal(isValidTaskId(null), false);
 });
+
+test("accepts project assignments and explicit unassignment", () => {
+  const projectId = `c${"a".repeat(24)}`;
+
+  assert.equal(
+    validateTaskInput({ title: "Assigned task", projectId }).data.projectId,
+    projectId,
+  );
+  assert.equal(
+    validateTaskInput({ projectId: null }, { partial: true }).data.projectId,
+    null,
+  );
+  assert.ok(validateTaskInput({ title: "Task", projectId: "invalid" }).error);
+});

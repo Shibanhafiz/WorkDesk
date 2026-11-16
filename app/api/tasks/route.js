@@ -9,6 +9,11 @@ export async function GET() {
   try {
     const tasks = await prisma.task.findMany({
       orderBy: { createdAt: "desc" },
+      include: {
+        project: {
+          select: { id: true, name: true, status: true },
+        },
+      },
     });
 
     return Response.json(tasks);
@@ -32,7 +37,24 @@ export async function POST(request) {
   }
 
   try {
-    const task = await prisma.task.create({ data: validation.data });
+    if (validation.data.projectId) {
+      const project = await prisma.project.findUnique({
+        where: { id: validation.data.projectId },
+        select: { id: true },
+      });
+      if (!project) {
+        return errorResponse("Project not found.", 404);
+      }
+    }
+
+    const task = await prisma.task.create({
+      data: validation.data,
+      include: {
+        project: {
+          select: { id: true, name: true, status: true },
+        },
+      },
+    });
     return Response.json(task, { status: 201 });
   } catch (error) {
     logTaskApiError("create", error);

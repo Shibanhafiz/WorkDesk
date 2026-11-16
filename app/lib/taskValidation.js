@@ -1,3 +1,5 @@
+import { isValidProjectId } from "./projectValidation.js";
+
 const validPriorities = new Set(["LOW", "MEDIUM", "HIGH"]);
 const validStatuses = new Set(["TODO", "IN_PROGRESS", "DONE"]);
 const allowedFields = new Set([
@@ -6,6 +8,7 @@ const allowedFields = new Set([
   "priority",
   "status",
   "dueDate",
+  "projectId",
 ]);
 
 export function isValidTaskId(id) {
@@ -91,6 +94,16 @@ export function validateTaskInput(input, { partial = false } = {}) {
       return { error: "Due date must be a valid YYYY-MM-DD date or null." };
     } else {
       data.dueDate = new Date(`${input.dueDate}T00:00:00.000Z`);
+    }
+  }
+
+  if (Object.hasOwn(input, "projectId")) {
+    if (input.projectId === null) {
+      data.projectId = null;
+    } else if (!isValidProjectId(input.projectId)) {
+      return { error: "Project ID must be a valid CUID or null." };
+    } else {
+      data.projectId = input.projectId;
     }
   }
 

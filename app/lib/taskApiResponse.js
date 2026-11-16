@@ -2,7 +2,7 @@ export function errorResponse(message, status) {
   return Response.json({ error: message }, { status });
 }
 
-export function logTaskApiError(operation, error) {
+export function logApiError(resource, operation, error) {
   const errorName = error instanceof Error ? error.name : "UnknownError";
   const errorCode =
     error &&
@@ -12,5 +12,11 @@ export function logTaskApiError(operation, error) {
       ? ` (${error.code})`
       : "";
 
-  console.error(`[Task API] ${operation} failed: ${errorName}${errorCode}`);
+  console.error(
+    `[${resource} API] ${operation} failed: ${errorName}${errorCode}`,
+  );
+}
+
+export function logTaskApiError(operation, error) {
+  logApiError("Task", operation, error);
 }
