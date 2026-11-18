@@ -22,7 +22,7 @@
 
 <p align="center">
   <img
-    src="workdesk-dashboard.png"
+    src="workdesk-dashboard-preview.jpeg"
     alt="AI-generated WorkDesk dashboard concept"
     width="100%"
   />
