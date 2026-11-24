@@ -27,7 +27,7 @@ disk when the app or development server restarts.
 
 ## How task creation works
 
-1. The form in `app/components/TaskForm.js` collects task fields on the All
+1. The form in `app/components/Form.js` collects task fields on the All
    Tasks page (`app/tasks/page.js`).
 2. `app/components/TaskManagement.js` sends them with `fetch()` to `POST /api/tasks`.
 3. `app/api/tasks/route.js` validates the request and calls Prisma Client.
@@ -60,6 +60,45 @@ applies theme and density choices across pages. These settings are not tied to
 an account and do not sync between browsers. Task insights are calculated from
 the list returned by the database-backed task API; no sample statistics are
 hardcoded.
+
+## Project Structure
+
+```text
+WorkDesk/
+├── app/
+│   ├── api/
+│   │   ├── projects/
+│   │   │   ├── [id]/
+│   │   │   └── route.js
+│   │   └── tasks/
+│   │       ├── [id]/
+│   │       └── route.js
+│   ├── components/
+│   │   ├── TaskForm.js
+│   │   ├── TaskManagement.js
+│   │   ├── Sidebar.js
+│   │   └── ...
+│   ├── lib/
+│   │   ├── prisma.js
+│   │   └── useTasks.js
+│   ├── projects/
+│   ├── tasks/
+│   ├── upcoming/
+│   ├── analytics/
+│   ├── settings/
+│   └── page.js
+├── generated/
+│   └── prisma/
+├── prisma/
+│   ├── migrations/
+│   ├── schema.prisma
+│   └── workdesk.db
+├── public/
+├── tests/
+├── prisma.config.mjs
+├── package.json
+└── README.md
+```
 
 ## Projects and task relationships
 
