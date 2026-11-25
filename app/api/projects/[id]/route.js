@@ -7,6 +7,7 @@ import {
 } from "@/app/lib/projectValidation";
 import { getSessionUser } from "@/app/lib/session";
 import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
+import { can } from "@/app/lib/workspacePermissions";
 
 function isRecordNotFound(error) {
   return error && typeof error === "object" && error.code === "P2025";
@@ -61,11 +62,10 @@ export async function PATCH(request, { params }) {
   const access = await requireProjectAccess(prisma, id, user.id);
   if (access.error) return errorResponse(access.error, access.status);
 
-  const levels = { ADMIN: 3, MANAGER: 2, MEMBER: 1 };
   const membership = await prisma.workspaceMember.findFirst({
     where: { userId: user.id, workspaceId: access.project.workspaceId },
   });
-  if (!membership || (levels[membership.role] ?? 0) < 2) {
+  if (!membership || !can(membership.role, "MANAGER")) {
     return errorResponse("Only managers and admins can edit projects.", 403);
   }
 

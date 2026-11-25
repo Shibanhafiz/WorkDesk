@@ -1,5 +1,6 @@
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
+import { checkRateLimit, getClientKey } from "@/app/lib/rateLimit";
 import { hashPassword } from "@/app/lib/password";
 import {
   hashPasswordResetToken,
@@ -18,6 +19,17 @@ export async function POST(request) {
   if (validation.error) return errorResponse(validation.error, 400);
 
   const { token, password } = validation.data;
+  const rate = checkRateLimit(`reset-confirm:${getClientKey(request)}`, {
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rate.allowed) {
+    return Response.json(
+      { error: "Too many attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
+    );
+  }
+
   const tokenHash = hashPasswordResetToken(token);
 
   try {

@@ -309,3 +309,26 @@ npm run build # production build + TypeScript check
 Tests cover role hierarchy, workspace/task access enforcement, comment
 permissions, notification building and delivery, invitation tokens and expiry,
 and project/task validation. There are no end-to-end browser tests yet.
+
+## WorkDesk V2 entry flows
+
+- Registration creates an account and personal workspace, then opens the
+  four-step onboarding flow (workspace choice, profile, invitations, first
+  project). Existing accounts go straight to their last active workspace.
+- Login supports email/password, a password visibility toggle, optional
+  "remember me", and hashed, single-use password reset links.
+- The workspace switcher separates personal and team workspaces, remembers the
+  active workspace on the server session, and scopes page data to it.
+- My Tasks shows assignments across accessible workspaces; Team shows member
+  workload with drill-down and reassignment.
+- Invitations are single-use links with expiry, status, resend and revoke. No
+  email is sent unless `INVITATION_WEBHOOK_URL` is configured.
+- `GET /api/health` provides a database-backed health check.
+
+## Documentation and operations
+
+See `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/TESTING.md`,
+`docs/DEPLOYMENT.md` and `docs/DATABASE.md` for detailed notes. Environment
+variables are listed in `.env.example`. SQLite is the current database; a
+managed PostgreSQL migration is still required before internet-facing
+multi-user deployment. CI runs lint, tests and build on push and pull request.

@@ -3,6 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { hashPassword, validateRegistrationInput } from "@/app/lib/password";
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from "@/app/lib/session";
+import { checkRateLimit, getClientKey } from "@/app/lib/rateLimit";
 
 /**
  * POST /api/auth/register
@@ -20,6 +21,16 @@ export async function POST(request) {
   if (validation.error) return errorResponse(validation.error, 400);
 
   const { name, email, password } = validation.data;
+  const rate = checkRateLimit(`register:${getClientKey(request)}`, {
+    limit: 3,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rate.allowed) {
+    return Response.json(
+      { error: "Too many registration attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
+    );
+  }
 
   try {
     const existing = await prisma.user.findUnique({ where: { email } });

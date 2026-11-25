@@ -7,6 +7,7 @@ import {
   validateRememberFlag,
 } from "@/app/lib/password";
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from "@/app/lib/session";
+import { checkRateLimit, getClientKey } from "@/app/lib/rateLimit";
 
 /**
  * POST /api/auth/login
@@ -28,6 +29,16 @@ export async function POST(request) {
   }
 
   const { email, password } = validation.data;
+  const rate = checkRateLimit(
+    `login:${getClientKey(request)}:${email}`,
+    { limit: 8, windowMs: 15 * 60 * 1000 },
+  );
+  if (!rate.allowed) {
+    return Response.json(
+      { error: "Too many sign-in attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
+    );
+  }
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });

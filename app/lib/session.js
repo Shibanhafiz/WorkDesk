@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { can } from "./workspacePermissions";
 import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
@@ -92,8 +93,7 @@ export async function requireWorkspaceMember(prisma, workspaceId, requiredRole =
     return { error: "You are not a member of this workspace.", status: 403 };
   }
 
-  const levels = { ADMIN: 3, MANAGER: 2, MEMBER: 1 };
-  if ((levels[membership.role] ?? 0) < (levels[requiredRole] ?? 0)) {
+  if (!can(membership.role, requiredRole)) {
     return { error: "Insufficient permissions.", status: 403 };
   }
 

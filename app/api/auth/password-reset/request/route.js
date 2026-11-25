@@ -1,5 +1,6 @@
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
+import { checkRateLimit, getClientKey } from "@/app/lib/rateLimit";
 import {
   createPasswordResetToken,
   hashPasswordResetToken,
@@ -19,6 +20,17 @@ export async function POST(request) {
   if (validation.error) return errorResponse(validation.error, 400);
 
   const { email } = validation.data;
+  const rate = checkRateLimit(
+    `reset-request:${getClientKey(request)}:${email}`,
+    { limit: 3, windowMs: 60 * 60 * 1000 },
+  );
+  if (!rate.allowed) {
+    return Response.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
+    );
+  }
+
   const webhookUrl = process.env.PASSWORD_RESET_WEBHOOK_URL;
 
   try {

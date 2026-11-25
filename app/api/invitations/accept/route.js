@@ -2,6 +2,7 @@ import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { getSessionUser } from "@/app/lib/session";
 import { acceptWorkspaceInvitation } from "@/app/lib/invitationAcceptance";
+import { checkRateLimit, getClientKey } from "@/app/lib/rateLimit";
 
 /**
  * POST /api/invitations/accept — accept by token using the session user.
@@ -16,6 +17,17 @@ export async function POST(request) {
     body = await request.json();
   } catch {
     return errorResponse("Request body must be valid JSON.", 400);
+  }
+
+  const rate = checkRateLimit(`invite-accept:${getClientKey(request)}`, {
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rate.allowed) {
+    return Response.json(
+      { error: "Too many attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfter) } },
+    );
   }
 
   const result = await acceptWorkspaceInvitation(prisma, user, body?.token);
