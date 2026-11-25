@@ -35,16 +35,10 @@ test("rejects descriptions longer than 1000 characters", () => {
   );
 });
 
-test("accepts only supported priorities and statuses", () => {
+test("accepts only supported priorities", () => {
   for (const priority of ["LOW", "MEDIUM", "HIGH"]) {
     assert.equal(
       validateTaskInput({ title: "Valid title", priority }).error,
-      undefined,
-    );
-  }
-  for (const status of ["TODO", "IN_PROGRESS", "DONE"]) {
-    assert.equal(
-      validateTaskInput({ title: "Valid title", status }).error,
       undefined,
     );
   }
@@ -52,7 +46,13 @@ test("accepts only supported priorities and statuses", () => {
   assert.ok(
     validateTaskInput({ title: "Valid title", priority: "URGENT" }).error,
   );
-  assert.ok(validateTaskInput({ title: "Valid title", status: "BLOCKED" }).error);
+});
+
+test("rejects direct status edits (lifecycle actions only)", () => {
+  assert.ok(validateTaskInput({ title: "Valid title", status: "DONE" }).error);
+  assert.ok(
+    validateTaskInput({ status: "DONE" }, { partial: true }).error,
+  );
 });
 
 test("rejects malformed or impossible due dates", () => {
@@ -74,7 +74,7 @@ test("rejects malformed bodies, unknown fields, and empty patches", () => {
   assert.ok(validateTaskInput({ title: "Valid title", extra: true }).error);
   assert.ok(validateTaskInput({}, { partial: true }).error);
   assert.equal(
-    validateTaskInput({ status: "DONE" }, { partial: true }).error,
+    validateTaskInput({ title: "Updated title" }, { partial: true }).error,
     undefined,
   );
 });
@@ -97,4 +97,16 @@ test("accepts project assignments and explicit unassignment", () => {
     null,
   );
   assert.ok(validateTaskInput({ title: "Task", projectId: "invalid" }).error);
+});
+
+test("accepts valid assignee IDs and explicit unassignment", () => {
+  const userId = "f4ec7ba1-9981-4f66-87d9-506c56209259";
+  const validated = validateTaskInput({ title: "Assigned", assigneeId: userId });
+  assert.equal(validated.error, undefined);
+  assert.equal(validated.data.assigneeId, userId);
+  assert.equal(
+    validateTaskInput({ assigneeId: null }, { partial: true }).data.assigneeId,
+    null,
+  );
+  assert.ok(validateTaskInput({ title: "Task", assigneeId: "unknown" }).error);
 });

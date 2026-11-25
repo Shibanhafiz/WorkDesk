@@ -1,56 +1,123 @@
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logTaskApiError } from "@/app/lib/taskApiResponse";
-import { isValidTaskId, validateTaskInput } from "@/app/lib/taskValidation";
+import { validateTaskInput } from "@/app/lib/taskValidation";
+import { requireWorkspaceMember } from "@/app/lib/session";
+import {
+  verifyAssignableMember,
+  canManageWork,
+} from "@/app/lib/workspacePermissions";
+import {
+  createNotificationOnce,
+  taskAssignmentNotification,
+} from "@/app/lib/notifications";
+import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
 
 function isRecordNotFound(error) {
   return error && typeof error === "object" && error.code === "P2025";
 }
 
+const taskInclude = {
+  project: { select: { id: true, name: true, status: true } },
+  assignee: {
+    select: { id: true, name: true, email: true, avatarUrl: true, specialization: true },
+  },
+  history: {
+    orderBy: { createdAt: "asc" },
+    include: { actor: { select: { id: true, name: true, email: true } } },
+  },
+};
+
 export async function PATCH(request, { params }) {
   const { id } = await params;
-  if (!isValidTaskId(id)) {
-    return errorResponse("Task ID must be a valid CUID.", 400);
-  }
 
-  let input;
+  let body;
   try {
-    input = await request.json();
+    body = await request.json();
   } catch {
     return errorResponse("Request body must be valid JSON.", 400);
   }
 
-  const validation = validateTaskInput(input, { partial: true });
-  if (validation.error) {
-    return errorResponse(validation.error, 400);
+  if (Object.hasOwn(body, "status")) {
+    return errorResponse(
+      "Status cannot be edited directly. Use a lifecycle action instead.",
+      400,
+    );
+  }
+
+  const validation = validateTaskInput(body, { partial: true });
+  if (validation.error) return errorResponse(validation.error, 400);
+
+  const task = await prisma.task.findUnique({ where: { id } });
+  if (!task) return errorResponse("Task not found.", 404);
+
+  const access = await requireWorkspaceMember(prisma, task.workspaceId, "MEMBER");
+  if (access.error) return errorResponse(access.error, access.status);
+
+  const isAssignee = task.assigneeId === access.userId;
+  const isSelfAssignment =
+    validation.data.assigneeId === access.userId &&
+    Object.keys(validation.data).every((field) => field === "assigneeId");
+  if (!isAssignee && !canManageWork(access.role) && !isSelfAssignment) {
+    return errorResponse("You cannot edit this task.", 403);
   }
 
   try {
     if (validation.data.projectId) {
-      const project = await prisma.project.findUnique({
-        where: { id: validation.data.projectId },
-        select: { id: true },
+      const project = await prisma.project.findFirst({
+        where: { id: validation.data.projectId, workspaceId: task.workspaceId },
       });
-      if (!project) {
-        return errorResponse("Project not found.", 404);
-      }
+      if (!project) return errorResponse("Project not found in this workspace.", 404);
     }
 
-    const task = await prisma.task.update({
+    if (validation.data.assigneeId && validation.data.assigneeId !== access.userId) {
+      if (!canManageWork(access.role)) {
+        return errorResponse(
+          "Only managers and admins can assign tasks to other members.",
+          403,
+        );
+      }
+      const assignable = await verifyAssignableMember(
+        prisma, task.workspaceId, validation.data.assigneeId, access.userId, access.role,
+      );
+      if (assignable.error) return errorResponse(assignable.error, 403);
+    }
+
+    const previousAssigneeId = task.assigneeId;
+    const updatedTask = await prisma.task.update({
       where: { id },
       data: validation.data,
-      include: {
-        project: {
-          select: { id: true, name: true, status: true },
-        },
-      },
+      include: taskInclude,
     });
 
-    return Response.json(task);
-  } catch (error) {
-    if (isRecordNotFound(error)) {
-      return errorResponse("Task not found.", 404);
+    if (
+      validation.data.assigneeId !== undefined &&
+      validation.data.assigneeId !== previousAssigneeId
+    ) {
+      const activity = await recordActivity(prisma, {
+        workspaceId: task.workspaceId,
+        actorId: access.userId,
+        type: ACTIVITY_TYPES.TASK_ASSIGNED,
+        targetId: id,
+        targetType: "TASK",
+        metadata: {
+          fromAssigneeId: previousAssigneeId,
+          toAssigneeId: validation.data.assigneeId,
+          title: task.title,
+        },
+      });
+      const notification = taskAssignmentNotification({
+        assigneeId: validation.data.assigneeId,
+        actorId: access.userId,
+        taskTitle: task.title,
+        taskId: id,
+        occurrence: activity?.id ?? "",
+      });
+      if (notification) await createNotificationOnce(prisma, notification);
     }
 
+    return Response.json(updatedTask);
+  } catch (error) {
+    if (isRecordNotFound(error)) return errorResponse("Task not found.", 404);
     logTaskApiError("update", error);
     return errorResponse("Unable to update task. Please try again.", 500);
   }
@@ -58,18 +125,18 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(_request, { params }) {
   const { id } = await params;
-  if (!isValidTaskId(id)) {
-    return errorResponse("Task ID must be a valid CUID.", 400);
-  }
+
+  const task = await prisma.task.findUnique({ where: { id } });
+  if (!task) return errorResponse("Task not found.", 404);
+
+  const access = await requireWorkspaceMember(prisma, task.workspaceId, "MANAGER");
+  if (access.error) return errorResponse(access.error, access.status);
 
   try {
     await prisma.task.delete({ where: { id } });
     return Response.json({ id });
   } catch (error) {
-    if (isRecordNotFound(error)) {
-      return errorResponse("Task not found.", 404);
-    }
-
+    if (isRecordNotFound(error)) return errorResponse("Task not found.", 404);
     logTaskApiError("delete", error);
     return errorResponse("Unable to delete task. Please try again.", 500);
   }

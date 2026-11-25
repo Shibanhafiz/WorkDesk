@@ -1,15 +1,13 @@
 import Link from "next/link";
-
-const statusClasses = {
-  "To Do": "status-todo",
-  "In Progress": "status-in-progress",
-  Completed: "status-done",
-};
+import {
+  STATUS_LABELS,
+  STATUS_TONES,
+} from "../lib/taskLifecycle";
 
 const priorityClasses = {
-  High: "priority-high",
-  Medium: "priority-medium",
-  Low: "priority-low",
+  HIGH: "priority-high",
+  MEDIUM: "priority-medium",
+  LOW: "priority-low",
 };
 
 function formatDueDate(dateValue) {
@@ -27,13 +25,16 @@ function formatDueDate(dateValue) {
 
 export default function TaskCard({
   task,
-  statuses,
   onEdit,
   onViewTask,
   onDelete,
-  onStatusChange,
+  onAction,
+  availableActions = [],
   isBusy = false,
 }) {
+  const statusLabel = STATUS_LABELS[task.status] ?? task.status;
+  const statusTone = STATUS_TONES[task.status] ?? "status-todo";
+
   return (
     <article id={`task-${task.id}`} className="task-register-row">
       <div className="task-record-main">
@@ -42,9 +43,26 @@ export default function TaskCard({
           <p className="task-description">{task.description}</p>
         ) : null}
         <div className="task-summary-footer">
+          <span className={`status-tag ${statusTone}`} data-status={task.status}>
+            {statusLabel}
+          </span>
           <span className={`priority-tag ${priorityClasses[task.priority]}`}>
             {task.priority} priority
           </span>
+          {task.reopenCount > 0 ? (
+            <span className="priority-tag priority-medium">
+              Reopened {task.reopenCount}x
+            </span>
+          ) : null}
+          {task.assignee ? (
+            <span className="task-assignee" title={task.assignee.email}>
+              {task.assignee.name || task.assignee.email}
+            </span>
+          ) : (
+            <span className="task-assignee task-assignee-none">
+              Unassigned
+            </span>
+          )}
           {task.project ? (
             <Link
               href={`/projects/${task.project.id}`}
@@ -54,7 +72,7 @@ export default function TaskCard({
               {task.project.status === "ARCHIVED" ? " · Archived" : ""}
             </Link>
           ) : (
-            <span className="task-project-unassigned">Unassigned</span>
+            <span className="task-project-unassigned">No project</span>
           )}
           <time
             className="task-summary-date"
@@ -66,20 +84,18 @@ export default function TaskCard({
       </div>
 
       <div className="task-record-actions">
-        <label className="sr-only" htmlFor={`status-${task.id}`}>
-          Status for {task.title}
-        </label>
-        <select
-          id={`status-${task.id}`}
-          value={task.status}
-          disabled={isBusy}
-          onChange={(event) => onStatusChange(task.id, event.target.value)}
-          className={`status-control ${statusClasses[task.status]}`}
-        >
-          {statuses.map((status) => (
-            <option key={status}>{status}</option>
-          ))}
-        </select>
+        {availableActions.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            onClick={() => onAction(task, action.key)}
+            disabled={isBusy}
+            aria-label={`${action.label} ${task.title}`}
+            className={`record-action ${action.danger ? "record-action-danger" : ""}`}
+          >
+            {action.label}
+          </button>
+        ))}
         <button
           type="button"
           onClick={() => onViewTask(task)}

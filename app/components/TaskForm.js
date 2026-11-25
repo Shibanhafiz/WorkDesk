@@ -1,21 +1,22 @@
 import { useRef, useState } from "react";
 import Dialog from "./Dialog";
+import AssigneePicker from "./AssigneePicker";
 
 const priorities = ["High", "Medium", "Low"];
-const statuses = ["To Do", "In Progress", "Completed"];
 
 function isValidDateOnly(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
   const date = new Date(`${value}T00:00:00.000Z`);
-  return (
-    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    !Number.isNaN(date.getTime()) &&
-    date.toISOString().slice(0, 10) === value
-  );
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 export default function TaskForm({
   initialTask,
   projects = [],
+  members = [],
   projectsError = "",
   onReloadProjects,
   defaultProjectId = null,
@@ -27,6 +28,7 @@ export default function TaskForm({
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [assigneeId, setAssigneeId] = useState(initialTask?.assignee?.id ?? "");
   const isSubmitting = useRef(false);
 
   async function handleSubmit(event) {
@@ -40,7 +42,6 @@ export default function TaskForm({
     const description = String(formData.get("description") ?? "").trim();
     const dueDate = String(formData.get("dueDate") ?? "");
     const priority = formData.get("priority");
-    const status = formData.get("status");
     const projectId = String(formData.get("projectId") ?? "");
     const validationErrors = {};
 
@@ -61,9 +62,6 @@ export default function TaskForm({
     if (!priorities.includes(priority)) {
       validationErrors.priority = "Choose a valid priority.";
     }
-    if (!statuses.includes(status)) {
-      validationErrors.status = "Choose a valid status.";
-    }
 
     setFieldErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) {
@@ -77,9 +75,9 @@ export default function TaskForm({
         title,
         description: description || null,
         priority,
-        status,
         dueDate: dueDate || null,
         projectId: projectId || null,
+        assigneeId: assigneeId || null,
       });
     } finally {
       isSubmitting.current = false;
@@ -195,28 +193,6 @@ export default function TaskForm({
             ) : null}
           </label>
 
-          <label className="form-field">
-            <span className="field-label">Status</span>
-            <select
-              name="status"
-              defaultValue={initialTask?.status ?? "To Do"}
-              aria-invalid={Boolean(fieldErrors.status)}
-              aria-describedby={fieldErrors.status ? "status-error" : undefined}
-              onChange={() =>
-                setFieldErrors((current) => ({ ...current, status: "" }))
-              }
-              className="form-control"
-            >
-              {statuses.map((status) => (
-                <option key={status}>{status}</option>
-              ))}
-            </select>
-            {fieldErrors.status ? (
-              <span id="status-error" className="field-error">
-                {fieldErrors.status}
-              </span>
-            ) : null}
-          </label>
         </div>
 
         <label className="form-field">
@@ -250,6 +226,15 @@ export default function TaskForm({
             ))}
           </select>
         </label>
+
+        <div className="form-field">
+          <span className="field-label" id="assignee-label">Assignee</span>
+          <AssigneePicker
+            members={members}
+            value={assigneeId}
+            onChange={setAssigneeId}
+          />
+        </div>
 
         <label className="form-field">
           <span className="field-label">Due date</span>

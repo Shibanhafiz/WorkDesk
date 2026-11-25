@@ -19,7 +19,7 @@ export default function TaskLoadState({
     return (
       <div className="state-panel">
         <p role="alert" className="state-error">
-          Tasks could not be loaded. {error}
+          {error}
         </p>
         <button
           type="button"

@@ -6,30 +6,32 @@ import PageHeader from "./PageHeader";
 import TaskCard from "./TaskCard";
 import TaskDetailsDialog from "./TaskDetailsDialog";
 import TaskForm from "./TaskForm";
+import LifecycleActionDialog from "./LifecycleActionDialog";
 import { sortTasks } from "../lib/taskInsights";
+import {
+  TASK_STATUSES,
+  STATUS_LABELS,
+  availableLifecycleActions,
+} from "../lib/taskLifecycle";
+import { useSession } from "./SessionProvider";
 import { useProjects } from "../lib/useProjects";
+import { useWorkspaces } from "../lib/useWorkspaces";
 
-const taskStatuses = ["To Do", "In Progress", "Completed"];
 const taskPriorities = ["High", "Medium", "Low"];
 const priorityLabels = { LOW: "Low", MEDIUM: "Medium", HIGH: "High" };
 const priorityValues = { Low: "LOW", Medium: "MEDIUM", High: "HIGH" };
-const statusLabels = {
-  TODO: "To Do",
-  IN_PROGRESS: "In Progress",
-  DONE: "Completed",
-};
-const statusValues = {
-  "To Do": "TODO",
-  "In Progress": "IN_PROGRESS",
-  Completed: "DONE",
-};
+
+// Display labels for the status filter dropdown (API enum values).
+const taskStatuses = TASK_STATUSES.map((status) => STATUS_LABELS[status]);
+const statusLabelToValue = Object.fromEntries(
+  TASK_STATUSES.map((status) => [STATUS_LABELS[status], status]),
+);
 
 function fromApiTask(task) {
   return {
     ...task,
     description: task.description ?? "",
-    priority: priorityLabels[task.priority],
-    status: statusLabels[task.status],
+    priority: priorityLabels[task.priority] ?? task.priority,
     dueDate: task.dueDate ? task.dueDate.slice(0, 10) : null,
   };
 }
@@ -37,8 +39,7 @@ function fromApiTask(task) {
 function toApiTask(task) {
   return {
     ...task,
-    priority: priorityValues[task.priority],
-    status: statusValues[task.status],
+    priority: priorityValues[task.priority] ?? task.priority,
   };
 }
 
@@ -52,8 +53,11 @@ async function readApiResponse(response, fallbackMessage) {
   return responseBody;
 }
 
-async function fetchTaskList() {
-  const response = await fetch("/api/tasks", { cache: "no-store" });
+async function fetchTaskList(workspaceId = null) {
+  const url = workspaceId
+    ? `/api/tasks?workspaceId=${encodeURIComponent(workspaceId)}`
+    : "/api/tasks";
+  const response = await fetch(url, { cache: "no-store" });
   const data = await readApiResponse(response, "Unable to load tasks.");
 
   if (!Array.isArray(data)) {
@@ -63,6 +67,21 @@ async function fetchTaskList() {
   return data.map(fromApiTask);
 }
 
+async function fetchMembers(workspaceId) {
+  if (!workspaceId) return [];
+
+  const response = await fetch(`/api/workspaces/${workspaceId}/members`, {
+    cache: "no-store",
+  });
+  const data = await readApiResponse(response, "Unable to load members.");
+
+  if (!Array.isArray(data)) {
+    throw new Error("The server returned an invalid member list.");
+  }
+
+  return data;
+}
+
 export default function TaskManagement({
   scopedProjectId = null,
   scopedProjectName = "",
@@ -70,16 +89,21 @@ export default function TaskManagement({
   onTaskChange,
 }) {
   const { preferences } = usePreferences();
+  const { currentWorkspace } = useWorkspaces();
   const {
     projects,
     error: projectsError,
     reloadProjects,
-  } = useProjects();
+  } = useProjects(currentWorkspace?.id ?? null);
+  const { user: sessionUser } = useSession();
+  const userId = sessionUser?.id ?? "";
   const [tasks, setTasks] = useState([]);
+  const [members, setMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All statuses");
   const [priorityFilter, setPriorityFilter] = useState("All priorities");
   const [projectFilter, setProjectFilter] = useState("all");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -89,13 +113,22 @@ export default function TaskManagement({
   const [feedback, setFeedback] = useState(null);
   const [taskFormError, setTaskFormError] = useState("");
   const [busyTaskId, setBusyTaskId] = useState(null);
+  const [lifecycleAction, setLifecycleAction] = useState(null);
+  const [lifecycleTask, setLifecycleTask] = useState(null);
+  const [lifecycleError, setLifecycleError] = useState("");
+
+  // Current user's role in the selected workspace. Defaults to MEMBER;
+  // the UI only hides actions — the backend re-validates every permission.
+  const currentUserRole =
+    members.find((m) => m.userId === userId)?.role ?? sessionUser?.role ?? "MEMBER";
+  const workspaceId = currentWorkspace?.id ?? null;
 
   const loadTasks = useCallback(async () => {
     setIsLoading(true);
     setLoadError("");
 
     try {
-      setTasks(await fetchTaskList());
+      setTasks(await fetchTaskList(workspaceId));
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Unable to load tasks.",
@@ -103,12 +136,12 @@ export default function TaskManagement({
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     let isMounted = true;
 
-    fetchTaskList()
+    fetchTaskList(workspaceId)
       .then((loadedTasks) => {
         if (isMounted) {
           setTasks(loadedTasks);
@@ -130,7 +163,28 @@ export default function TaskManagement({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [workspaceId]);
+
+  // Load members when workspace changes
+  useEffect(() => {
+    if (!currentWorkspace?.id) return;
+
+    let isMounted = true;
+
+    fetchMembers(currentWorkspace.id)
+      .then((loadedMembers) => {
+        if (isMounted) {
+          setMembers(loadedMembers);
+        }
+      })
+      .catch(() => {
+        // Members load failure is non-critical
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentWorkspace?.id]);
 
   const scopedTasks = scopedProjectId
     ? tasks.filter((task) => task.projectId === scopedProjectId)
@@ -141,7 +195,8 @@ export default function TaskManagement({
       task.title.toLowerCase().includes(normalizedSearch) ||
       task.description.toLowerCase().includes(normalizedSearch);
     const matchesStatus =
-      statusFilter === "All statuses" || task.status === statusFilter;
+      statusFilter === "All statuses" ||
+      task.status === (statusLabelToValue[statusFilter] ?? statusFilter);
     const matchesPriority =
       priorityFilter === "All priorities" || task.priority === priorityFilter;
     const matchesProject =
@@ -150,8 +205,16 @@ export default function TaskManagement({
       (projectFilter === "unassigned"
         ? !task.projectId
         : task.projectId === projectFilter);
+    const matchesAssignee =
+      assigneeFilter === "all" ||
+      (assigneeFilter === "unassigned"
+        ? !task.assignee
+        : task.assignee?.id === assigneeFilter);
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesProject;
+    return (
+      matchesSearch && matchesStatus && matchesPriority &&
+      matchesProject && matchesAssignee
+    );
   });
   const visibleTasks = sortTasks(filteredTasks, sortOrder);
   const hasNoScopedTasks = scopedTasks.length === 0;
@@ -160,6 +223,7 @@ export default function TaskManagement({
     statusFilter !== "All statuses" ||
     priorityFilter !== "All priorities" ||
     (!scopedProjectId && projectFilter !== "all") ||
+    assigneeFilter !== "all" ||
     sortOrder !== "newest";
 
   function clearFilters() {
@@ -167,6 +231,7 @@ export default function TaskManagement({
     setStatusFilter("All statuses");
     setPriorityFilter("All priorities");
     setProjectFilter("all");
+    setAssigneeFilter("all");
     setSortOrder("newest");
   }
 
@@ -217,6 +282,7 @@ export default function TaskManagement({
         message: isEditing ? "Task updated." : "Task created.",
       });
       onTaskChange?.();
+      await reloadProjects();
       setIsTaskFormOpen(false);
       setEditingTask(null);
     } catch (error) {
@@ -258,15 +324,42 @@ export default function TaskManagement({
     }
   }
 
-  async function changeTaskStatus(taskId, newStatus) {
+  function isReviewer() {
+    return currentUserRole === "MANAGER" || currentUserRole === "ADMIN";
+  }
+
+  // Actions shown are a UX convenience only; the backend validates all of
+  // these rules again before applying any transition.
+  function availableActionsFor(task) {
+    return availableLifecycleActions({
+      status: task.status,
+      assigneeId: task.assignee?.id ?? null,
+      userId,
+      role: currentUserRole,
+    });
+  }
+
+  function requestLifecycleAction(task, action) {
+    setLifecycleTask(task);
+    setLifecycleAction(action);
+    setLifecycleError("");
+  }
+
+  async function performLifecycleAction({ action, reason, reviewComment }) {
+    if (!lifecycleTask) return;
+    const taskId = lifecycleTask.id;
+    const workspaceId = currentWorkspace?.id;
+
     setBusyTaskId(taskId);
+    setLifecycleError("");
     setFeedback(null);
 
     try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: "PATCH",
+      const url = `/api/tasks/${taskId}/transitions`;
+      const response = await fetch(url, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: statusValues[newStatus] }),
+        body: JSON.stringify({ action, reason, reviewComment }),
       });
       const updatedTask = fromApiTask(
         await readApiResponse(response, "Unable to update task status."),
@@ -276,16 +369,21 @@ export default function TaskManagement({
           task.id === updatedTask.id ? updatedTask : task,
         ),
       );
-      setFeedback({ type: "success", message: "Task status updated." });
+      setViewingTask((current) =>
+        current && current.id === updatedTask.id ? updatedTask : current,
+      );
+      setFeedback({
+        type: "success",
+        message: `Task updated: ${STATUS_LABELS[updatedTask.status] ?? updatedTask.status}.`,
+      });
+      setLifecycleAction(null);
+      setLifecycleTask(null);
       onTaskChange?.();
     } catch (error) {
-      setFeedback({
-        type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to update task status.",
-      });
+      const message =
+        error instanceof Error ? error.message : "Unable to update task status.";
+      setLifecycleError(message);
+      setFeedback({ type: "error", message });
     } finally {
       setBusyTaskId(null);
     }
@@ -316,7 +414,7 @@ export default function TaskManagement({
           number="03"
           title="All Tasks"
           description="A searchable register for the work in your workspace."
-          meta={`${tasks.length} ${tasks.length === 1 ? "RECORD" : "RECORDS"} · TITLE, STATUS, PRIORITY`}
+          meta={`${tasks.length} ${tasks.length === 1 ? "RECORD" : "RECORDS"} · TITLE, STATUS, PRIORITY, ASSIGNEE`}
           action={
             <button
               type="button"
@@ -403,7 +501,7 @@ export default function TaskManagement({
                 className="form-control"
               >
                 <option value="all">All projects</option>
-                <option value="unassigned">Unassigned</option>
+                <option value="unassigned">No project</option>
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
                     {project.name}
@@ -412,6 +510,23 @@ export default function TaskManagement({
               </select>
             </label>
           ) : null}
+
+          <label>
+            <span className="sr-only">Filter tasks by assignee</span>
+            <select
+              value={assigneeFilter}
+              onChange={(event) => setAssigneeFilter(event.target.value)}
+              className="form-control"
+            >
+              <option value="all">All assignees</option>
+              <option value="unassigned">Unassigned</option>
+              {members.map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {member.name || member.email}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label>
             <span className="sr-only">Sort tasks</span>
@@ -475,11 +590,11 @@ export default function TaskManagement({
               <TaskCard
                 key={task.id}
                 task={task}
-                statuses={taskStatuses}
                 onEdit={openEditTaskForm}
                 onViewTask={setViewingTask}
                 onDelete={deleteTask}
-                onStatusChange={changeTaskStatus}
+                onAction={requestLifecycleAction}
+                availableActions={availableActionsFor(task)}
                 isBusy={busyTaskId === task.id}
               />
             ))}
@@ -522,6 +637,7 @@ export default function TaskManagement({
           key={editingTask ? editingTask.id : "new-task"}
           initialTask={editingTask}
           projects={projects}
+          members={members}
           projectsError={projectsError}
           onReloadProjects={reloadProjects}
           defaultProjectId={scopedProjectId}
@@ -541,6 +657,27 @@ export default function TaskManagement({
         <TaskDetailsDialog
           task={viewingTask}
           onClose={() => setViewingTask(null)}
+          availableActions={availableActionsFor(viewingTask)}
+          onAction={requestLifecycleAction}
+          isBusy={busyTaskId === viewingTask.id}
+          actionError={lifecycleAction ? lifecycleError : ""}
+          workspaceId={currentWorkspace?.id ?? null}
+          userId={userId}
+          canManage={isReviewer()}
+        />
+      )}
+
+      {lifecycleAction && lifecycleTask && (
+        <LifecycleActionDialog
+          action={lifecycleAction}
+          task={lifecycleTask}
+          onSubmit={performLifecycleAction}
+          onClose={() => {
+            setLifecycleAction(null);
+            setLifecycleTask(null);
+            setLifecycleError("");
+          }}
+          error={lifecycleError}
         />
       )}
     </div>

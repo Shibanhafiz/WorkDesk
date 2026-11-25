@@ -1,7 +1,9 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Sidebar from "./components/Sidebar";
+import { Suspense } from "react";
 import { PreferencesProvider } from "./components/PreferencesProvider";
+import { SessionProvider } from "./components/SessionProvider";
+import AuthGate from "./components/AuthGate";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,12 +27,13 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <PreferencesProvider>
-          <div className="workspace-layout">
-            <Sidebar />
-            <main className="workspace-main">{children}</main>
-          </div>
-        </PreferencesProvider>
+        <SessionProvider>
+          <PreferencesProvider>
+            <Suspense fallback={<p className="state-panel">Loading...</p>}>
+              <AuthGate>{children}</AuthGate>
+            </Suspense>
+          </PreferencesProvider>
+        </SessionProvider>
       </body>
     </html>
   );

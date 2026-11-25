@@ -1,8 +1,9 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import ProjectDetails from "../../components/ProjectDetails";
 import { prisma } from "../../lib/prisma";
 import { isValidProjectId } from "../../lib/projectValidation";
+import { getSessionUser } from "../../lib/session";
 
 export default function ProjectPage({ params }) {
   return (
@@ -26,6 +27,9 @@ async function ProjectPageContent({ params }) {
     notFound();
   }
 
+  const user = await getSessionUser(prisma);
+  if (!user) redirect("/login");
+
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
@@ -42,6 +46,17 @@ async function ProjectPageContent({ params }) {
   });
 
   if (!project) {
+    notFound();
+  }
+
+  if (!project.workspaceId) {
+    notFound();
+  }
+
+  const membership = await prisma.workspaceMember.findFirst({
+    where: { userId: user.id, workspaceId: project.workspaceId },
+  });
+  if (!membership) {
     notFound();
   }
 

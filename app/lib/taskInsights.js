@@ -34,6 +34,9 @@ export function calculateTaskMetrics(tasks, today) {
     total,
     todo: tasks.filter((task) => task.status === "TODO").length,
     inProgress: tasks.filter((task) => task.status === "IN_PROGRESS").length,
+    testing: tasks.filter((task) => task.status === "TESTING").length,
+    testingFailed: tasks.filter((task) => task.status === "TESTING_FAILED").length,
+    reopened: tasks.filter((task) => task.status === "REOPENED").length,
     completed,
     completionPercentage: total ? Math.round((completed / total) * 100) : 0,
     overdue: today

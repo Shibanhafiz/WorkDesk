@@ -1,14 +1,16 @@
 import { isValidProjectId } from "./projectValidation.js";
 
 const validPriorities = new Set(["LOW", "MEDIUM", "HIGH"]);
-const validStatuses = new Set(["TODO", "IN_PROGRESS", "DONE"]);
+// Status is intentionally NOT part of generic task input. Lifecycle changes
+// must go through the validated transition endpoint so workflow rules and
+// authorization cannot be bypassed by editing a status field directly.
 const allowedFields = new Set([
   "title",
   "description",
   "priority",
-  "status",
   "dueDate",
   "projectId",
+  "assigneeId",
 ]);
 
 export function isValidTaskId(id) {
@@ -77,13 +79,6 @@ export function validateTaskInput(input, { partial = false } = {}) {
     data.priority = input.priority;
   }
 
-  if (Object.hasOwn(input, "status")) {
-    if (!validStatuses.has(input.status)) {
-      return { error: "Status must be TODO, IN_PROGRESS, or DONE." };
-    }
-    data.status = input.status;
-  }
-
   if (Object.hasOwn(input, "dueDate")) {
     if (input.dueDate === null) {
       data.dueDate = null;
@@ -104,6 +99,24 @@ export function validateTaskInput(input, { partial = false } = {}) {
       return { error: "Project ID must be a valid CUID or null." };
     } else {
       data.projectId = input.projectId;
+    }
+  }
+
+  if (Object.hasOwn(input, "assigneeId")) {
+    if (input.assigneeId === null) {
+      data.assigneeId = null;
+    } else if (
+      typeof input.assigneeId !== "string" ||
+      !(
+        /^c[a-z0-9]{24}$/.test(input.assigneeId) ||
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          input.assigneeId,
+        )
+      )
+    ) {
+      return { error: "Assignee ID must be a valid user ID or null." };
+    } else {
+      data.assigneeId = input.assigneeId;
     }
   }
 

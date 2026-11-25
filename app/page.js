@@ -5,12 +5,15 @@ import PageHeader from "./components/PageHeader";
 import StatCard from "./components/StatCard";
 import TaskLoadState from "./components/TaskLoadState";
 import TaskSummaryCard from "./components/TaskSummaryCard";
-import { usePreferences } from "./components/PreferencesProvider";
+import { useSession } from "./components/SessionProvider";
 import { useTasks } from "./lib/useTasks";
 import { calculateTaskMetrics, sortTasks } from "./lib/taskInsights";
 import { calculateProjectMetrics } from "./lib/projectInsights";
 import { useProjects } from "./lib/useProjects";
+import { useWorkspaces } from "./lib/useWorkspaces";
 import ProjectStatusTag from "./components/ProjectStatusTag";
+import GettingStartedChecklist from "./components/GettingStartedChecklist";
+import WorkspaceActivity from "./components/WorkspaceActivity";
 
 const priorityItems = [
   { value: "LOW", label: "Low", tone: "priority-low" },
@@ -19,15 +22,23 @@ const priorityItems = [
 ];
 
 export default function OverviewPage() {
-  const { preferences } = usePreferences();
-  const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks();
+  const { user } = useSession();
+  const { currentWorkspace } = useWorkspaces();
+  const workspaceId = currentWorkspace?.id ?? null;
+  const {
+    tasks,
+    todayDateKey,
+    isLoading,
+    error,
+    reloadTasks,
+  } = useTasks(workspaceId);
   const {
     projects,
     todayDateKey: projectsTodayDateKey,
     isLoading: areProjectsLoading,
     error: projectsError,
     reloadProjects,
-  } = useProjects();
+  } = useProjects(workspaceId);
   const metrics = calculateTaskMetrics(tasks, todayDateKey);
   const projectMetrics = calculateProjectMetrics(
     projects,
@@ -75,18 +86,64 @@ export default function OverviewPage() {
     },
   ];
 
+  const myTaskCount = tasks.filter((task) => task.assignee?.id === user?.id).length;
+  const dashboardLinks = currentWorkspace?.isPersonal
+    ? [
+        { label: "My tasks", value: myTaskCount, detail: "Assigned to you", href: "/my-tasks" },
+        {
+          label: "Upcoming deadlines",
+          value: metrics.upcoming,
+          detail: "Due today or later",
+          href: "/upcoming",
+        },
+        {
+          label: "High priority",
+          value: metrics.priorities.HIGH,
+          detail: "Needs attention",
+          href: "/analytics",
+        },
+        {
+          label: "Completion",
+          value: `${metrics.completionPercentage}%`,
+          detail: "Of workspace tasks",
+          href: "/analytics",
+        },
+      ]
+    : [
+        {
+          label: "Team tasks",
+          value: metrics.total,
+          detail: "In this workspace",
+          href: "/tasks",
+        },
+        {
+          label: "Completion rate",
+          value: `${metrics.completionPercentage}%`,
+          detail: "Tasks marked done",
+          href: "/analytics",
+        },
+        {
+          label: "Workload",
+          value: new Set(tasks.map((task) => task.assigneeId).filter(Boolean)).size,
+          detail: "Members with tasks",
+          href: "/team",
+        },
+        {
+          label: "Overdue",
+          value: metrics.overdue,
+          detail: "Open tasks past due",
+          href: "/upcoming",
+        },
+      ];
+
   return (
     <div className="page-frame">
       <PageHeader
         number="01"
         eyebrow="YOUR WORKSPACE"
-        title={
-          preferences.displayName
-            ? `Welcome back, ${preferences.displayName}`
-            : "Welcome back"
-        }
+        title={user?.name ? `Welcome back, ${user.name}` : "Welcome back"}
         description="A clear view of your tasks, priorities, and what is coming next."
-        meta="LOCAL WORKSPACE · LIVE TASK REGISTER"
+        meta={`${(currentWorkspace?.name ?? "Your workspace").toUpperCase()} · LIVE TASK REGISTER`}
         action={
           <Link href="/tasks" className="button-primary">
             <span aria-hidden="true">+</span>
@@ -94,6 +151,41 @@ export default function OverviewPage() {
           </Link>
         }
       />
+
+      <GettingStartedChecklist
+        workspaceName={currentWorkspace?.name ?? ""}
+        hasProjects={projects.length > 0}
+      />
+
+      <section aria-labelledby="workspace-snapshot-heading" className="workspace-snapshot">
+        <div className="section-heading-row">
+          <div>
+            <p className="section-kicker">01 / WORKSPACE</p>
+            <h2 id="workspace-snapshot-heading" className="section-title">
+              {currentWorkspace?.isPersonal ? "Personal snapshot" : "Team snapshot"}
+            </h2>
+            <p className="section-description">
+              Live figures from {currentWorkspace?.name ?? "this workspace"}. Select a figure to explore it.
+            </p>
+          </div>
+        </div>
+        <div className="metric-grid">
+          {dashboardLinks.map((item) => (
+            <Link key={item.label} href={item.href} className="metric-item metric-link">
+              <span className="metric-label">{item.label}</span>
+              <span className="metric-value">{item.value}</span>
+              <span className="metric-detail">{item.detail}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {!currentWorkspace?.isPersonal && workspaceId ? (
+        <WorkspaceActivity
+          workspaceId={workspaceId}
+          workspaceName={currentWorkspace?.name ?? ""}
+        />
+      ) : null}
 
       <TaskLoadState
         isLoading={isLoading}
@@ -135,13 +227,16 @@ export default function OverviewPage() {
               ) : (
                 <div className="empty-state">
                   <p className="empty-state-title">
-                    {tasks.length ? "No open deadlines ahead" : "No tasks yet"}
+                    {tasks.length ? "No open deadlines ahead" : "No tasks in this workspace yet"}
                   </p>
                   <p className="empty-state-copy">
                     {tasks.length
                       ? "Tasks with a future due date will appear here."
-                      : "Add a task to start organizing your work."}
+                      : `Add a task in ${currentWorkspace?.name ?? "this workspace"} to get started.`}
                   </p>
+                  <Link href="/tasks" className="text-link-button empty-state-action">
+                    Add a task
+                  </Link>
                 </div>
               )}
             </section>
@@ -171,8 +266,11 @@ export default function OverviewPage() {
                 <div className="empty-state">
                   <p className="empty-state-title">Nothing on the register</p>
                   <p className="empty-state-copy">
-                    Your recent work will appear here as you add tasks.
+                    Tasks in {currentWorkspace?.name ?? "this workspace"} will appear here.
                   </p>
+                  <Link href="/tasks" className="text-link-button empty-state-action">
+                    Go to tasks
+                  </Link>
                 </div>
               )}
             </section>
@@ -270,6 +368,17 @@ export default function OverviewPage() {
           </div>
         ) : (
           <>
+            {projectMetrics.total === 0 ? (
+              <div className="empty-state">
+                <p className="empty-state-title">No projects in this workspace yet</p>
+                <p className="empty-state-copy">
+                  Create a project in {currentWorkspace?.name ?? "this workspace"} to group related work.
+                </p>
+                <Link href="/projects" className="text-link-button empty-state-action">
+                  Create your first project
+                </Link>
+              </div>
+            ) : null}
             <div className="project-overview-metrics">
               <div className="project-overview-metric">
                 <span className="metric-label">Total projects</span>

@@ -179,5 +179,133 @@ instances restart, so use a persistent volume or a database service supported
 by the chosen host. Apply migrations with `npm run db:deploy` before starting
 the production server.
 
-This learning project has no accounts, authentication, deployment setup, or
-remote database.
+## V2 features
+
+WorkDesk V2 adds multi-workspace collaboration on top of the task register:
+
+- Workspaces (personal and team) with workspace-scoped projects and tasks.
+- Workspace membership with roles: `ADMIN`, `MANAGER`, `MEMBER`.
+- Role hierarchy: `ADMIN > MANAGER > MEMMBER`, enforced server-side.
+- Invitations with expiring, single-use tokens and role-scoped acceptance.
+- Task assignment to workspace members.
+- Comments on tasks with author-only edit and author-or-admin delete.
+- Server-generated notifications (task assigned, comment added, mention, invitation received).
+- Activity logging for task and comment changes.
+- Projects with schedule, progress, and a task register.
+
+## Architecture
+
+```mermaid
+erDiagram
+  User ||--o{ WorkspaceMember : "memberships"
+  User ||--o{ Task : "assigned tasks"
+  User ||--o{ Comment : "authored"
+  User ||--o{ Notification : "receives"
+  User ||--o{ Activity : "performs"
+  Workspace ||--o{ WorkspaceMember : "members"
+  Workspace ||--o{ Project : "projects"
+  Workspace ||--o{ Task : "tasks"
+  Workspace ||--o{ Invitation : "invitations"
+  Workspace ||--o{ Activity : "events"
+  Project ||--o{ Task : "tasks"
+  Task ||--o{ Comment : "comments"
+```
+
+Role hierarchy: `ADMIN (3) > MANAGER (2) > MEMBER (1)`. A user may have a
+different role in each workspace.
+
+## Environment variables
+
+Copy `.env.example` to `.env` and adjust:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | Prisma datasource URL for SQLite | `file:./prisma/workdesk.db` |
+
+No other credentials or environment variables are required for local
+development.
+
+## Database setup and migrations
+
+```bash
+npm install
+npm run db:generate      # generate Prisma Client
+npm run db:deploy        # apply committed migrations
+npm run dev              # start the dev server (runs prisma generate first via predev)
+```
+
+The local database is `prisma/workdesk.db` (SQLite). It is ignored by Git and
+persists across restarts. Schema changes require a new development migration:
+
+```bash
+npm run db:migrate -- --name describe_your_change
+```
+
+### Backup and recovery
+
+The database is a single SQLite file at `prisma/workdesk.db`. To back it up,
+copy the file (and any `-wal`/`-shm` sidecar files if present) to durable
+storage:
+
+```bash
+# example: one-off backup
+cp prisma/workdesk.db backups/workdesk-$(date +%F).db
+```
+
+To restore, stop the server, replace `prisma/workdesk.db` with the backup,
+then restart and run `npm run db:deploy` to confirm migrations are applied.
+
+## Deployment
+
+This is a local-first SQLite application. A production host must provide
+durable, writable storage for the SQLite file so it survives instance
+restarts; ephemeral/serverless filesystems will lose data. Use a persistent
+volume or a managed database service supported by the host, and keep
+`DATABASE_URL` (and `app/lib/prisma.js`) pointed at the same database file.
+
+Before starting the production server:
+
+```bash
+npm run db:generate
+npm run db:deploy
+npm start
+```
+
+## Security notes and known limitations
+
+**Authentication is not yet implemented.** There are no registration, login,
+logout, or session-expiration routes and no `Session` model. API routes
+identify the caller through a `userId` query parameter, which can be spoofed,
+and `GET /api/tasks` without parameters returns every task across all
+workspaces. Treat this as a **release blocker**: before any deployment that
+exposes the API, add session-based authentication (cookie or bearer token)
+and a middleware that resolves the caller from the session rather than from
+user-controlled query input, scope every list endpoint to the caller's
+workspace(s), and add CSRF protection for state-changing mutations.
+
+Other security characteristics:
+- API error responses return only generic messages; detailed errors go to
+  server logs (`console.error`). Do not forward those logs to clients.
+- Invitations use 256-bit cryptographically random tokens and expire after 7
+  days by default.
+- Comment author and notification recipient are always set server-side from
+  the verified caller, never from the request body.
+
+Accessibility: pages use `aria-label`, `aria-labelledby`, `role="alert"`,
+`role="status"`, `role="progressbar"`, `aria-current="page"`, `sr-only`
+labels, and visible `focus-visible` outlines. The layout is responsive with
+breakpoints at 960px, 700px, and 420px, plus `prefers-reduced-motion` support.
+
+## Testing
+
+Unit and integration tests run with Node's built-in test runner:
+
+```bash
+npm test      # unit + lib integration tests
+npm run lint  # ESLint
+npm run build # production build + TypeScript check
+```
+
+Tests cover role hierarchy, workspace/task access enforcement, comment
+permissions, notification building and delivery, invitation tokens and expiry,
+and project/task validation. There are no end-to-end browser tests yet.

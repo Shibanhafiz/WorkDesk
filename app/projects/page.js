@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { usePreferences } from "../components/PreferencesProvider";
 import PageHeader from "../components/PageHeader";
 import ProjectCard from "../components/ProjectCard";
 import ProjectForm from "../components/ProjectForm";
 import { useProjects } from "../lib/useProjects";
 import { sortProjects } from "../lib/projectInsights";
+import { useWorkspaces } from "../lib/useWorkspaces";
 
 const projectStatuses = [
   { value: "PLANNING", label: "Planning" },
@@ -25,13 +27,20 @@ async function readApiResponse(response, fallbackMessage) {
 }
 
 export default function ProjectsPage() {
+  const { preferences } = usePreferences();
+  const {
+    workspaces,
+    currentWorkspace,
+    setCurrentWorkspace,
+    isLoading: areWorkspacesLoading,
+  } = useWorkspaces();
   const {
     projects,
     setProjects,
     isLoading,
     error: loadError,
     reloadProjects,
-  } = useProjects();
+  } = useProjects(currentWorkspace?.id ?? null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState("newest");
@@ -61,6 +70,17 @@ export default function ProjectsPage() {
   }
 
   function openProjectForm(project = null) {
+    if (!project && !currentWorkspace) {
+      setProjectFormError("");
+      setFeedback({
+        type: "error",
+        message: areWorkspacesLoading
+          ? "Workspaces are still loading. Please try again in a moment."
+          : "Select a workspace before creating a project.",
+      });
+      return;
+    }
+
     setEditingProject(project);
     setProjectFormError("");
     setFeedback(null);
@@ -71,9 +91,18 @@ export default function ProjectsPage() {
     setProjectFormError("");
     const isEditing = Boolean(editingProject);
 
+    if (!isEditing && !currentWorkspace) {
+      const message = "Select a workspace before creating a project.";
+      setProjectFormError(message);
+      setFeedback({ type: "error", message });
+      return;
+    }
+
     try {
       const response = await fetch(
-        isEditing ? `/api/projects/${editingProject.id}` : "/api/projects",
+        isEditing
+          ? `/api/projects/${editingProject.id}`
+          : `/api/projects?workspaceId=${encodeURIComponent(currentWorkspace.id)}`,
         {
           method: isEditing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -107,6 +136,13 @@ export default function ProjectsPage() {
   }
 
   async function archiveProject(project) {
+    if (
+      preferences.confirmDelete &&
+      !window.confirm(`Archive project "${project.name}"? This action cannot be undone.`)
+    ) {
+      return;
+    }
+
     setBusyProjectId(project.id);
     setFeedback(null);
 
@@ -221,6 +257,26 @@ export default function ProjectsPage() {
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
               <option value="deadline">Deadline (earliest)</option>
+            </select>
+          </label>
+
+          <label>
+            <span className="sr-only">Workspace selector</span>
+            <select
+              value={currentWorkspace?.id || ""}
+              onChange={(e) =>
+                setCurrentWorkspace(
+                  e.target.value ? workspaces.find((ws) => ws.id === e.target.value) : null
+                )
+              }
+              className="form-control"
+            >
+              <option value="">All workspaces</option>
+              {workspaces.map((ws) => (
+                <option key={ws.id} value={ws.id}>
+                  {ws.name}
+                </option>
+              ))}
             </select>
           </label>
         </div>

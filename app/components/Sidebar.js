@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import { usePreferences } from "./PreferencesProvider";
+import { useWorkspaces } from "../lib/useWorkspaces";
+import { useSession } from "./SessionProvider";
+import { ROLE_LABELS } from "../lib/workspacePermissions";
 
 const navigationGroups = [
   {
@@ -12,18 +15,29 @@ const navigationGroups = [
       { href: "/", label: "Overview", index: "01" },
       { href: "/projects", label: "Projects", index: "02" },
       { href: "/tasks", label: "All Tasks", index: "03" },
-      { href: "/upcoming", label: "Upcoming", index: "04" },
-      { href: "/analytics", label: "Analytics", index: "05" },
+      { href: "/my-tasks", label: "My Tasks", index: "04" },
+      { href: "/upcoming", label: "Upcoming", index: "05" },
+      { href: "/analytics", label: "Analytics", index: "06" },
     ],
   },
   {
+    label: "Team",
+    items: [{ href: "/team", label: "Members", index: "07" }],
+  },
+  {
     label: "Preferences",
-    items: [{ href: "/settings", label: "Settings", index: "06" }],
+    items: [{ href: "/settings", label: "Settings", index: "08" }],
   },
 ];
 
 function SidebarNavigation() {
   const pathname = usePathname();
+  const {
+    workspaces,
+    currentWorkspace,
+    setCurrentWorkspace,
+    selectionError,
+  } = useWorkspaces();
 
   return (
     <nav aria-label="Main navigation" className="sidebar-nav">
@@ -53,6 +67,46 @@ function SidebarNavigation() {
           })}
         </div>
       ))}
+
+      {workspaces.length > 0 && (
+        <div className="nav-group">
+          <p className="nav-group-label">Workspace</p>
+          <select
+            className="nav-link workspace-select"
+            aria-label="Active workspace"
+            value={currentWorkspace?.id ?? ""}
+            onChange={(e) => {
+              const workspace = workspaces.find((ws) => ws.id === e.target.value);
+              void setCurrentWorkspace(workspace ?? null);
+            }}
+          >
+            <option value="">Select workspace</option>
+            <optgroup label="Personal workspace">
+              {workspaces
+                .filter((ws) => ws.isPersonal)
+                .map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name}
+                  </option>
+                ))}
+            </optgroup>
+            <optgroup label="Team workspaces">
+              {workspaces
+                .filter((ws) => !ws.isPersonal)
+                .map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name}
+                  </option>
+                ))}
+            </optgroup>
+          </select>
+          {selectionError ? (
+            <p role="alert" className="nav-workspace-error">
+              {selectionError}
+            </p>
+          ) : null}
+        </div>
+      )}
     </nav>
   );
 }
@@ -69,8 +123,12 @@ function SidebarNavigationFallback() {
         <span className="nav-link">05&nbsp; Analytics</span>
       </div>
       <div className="nav-group">
+        <p className="nav-group-label">Team</p>
+        <span className="nav-link">06&nbsp; Members</span>
+      </div>
+      <div className="nav-group">
         <p className="nav-group-label">Preferences</p>
-        <span className="nav-link">06&nbsp; Settings</span>
+        <span className="nav-link">07&nbsp; Settings</span>
       </div>
     </nav>
   );
@@ -78,6 +136,15 @@ function SidebarNavigationFallback() {
 
 export default function Sidebar() {
   const { preferences } = usePreferences();
+  const { workspaces, currentWorkspace } = useWorkspaces();
+  const { user, logout } = useSession();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/login");
+  }
+
   return (
     <aside className="app-sidebar">
       <div className="sidebar-brand-row">
@@ -92,11 +159,29 @@ export default function Sidebar() {
       </Suspense>
 
       <div className="sidebar-profile">
-        <p className="sidebar-profile-label">Local profile</p>
+        <p className="sidebar-profile-label">Signed in as</p>
         <p className="sidebar-profile-name">
-          {preferences.displayName || "No display name set"}
+          {user?.name || user?.email || preferences.displayName || "—"}
         </p>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="text-link-button sidebar-logout"
+        >
+          Sign out
+        </button>
       </div>
+
+      {currentWorkspace && (
+        <div className="sidebar-workspace-badge">
+          <span>{currentWorkspace.name}</span>
+          {user?.role ? (
+            <span className="priority-tag priority-medium">
+              {ROLE_LABELS[user.role] || user.role}
+            </span>
+          ) : null}
+        </div>
+      )}
     </aside>
   );
 }

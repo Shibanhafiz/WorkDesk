@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getTodayDateKey } from "./taskInsights";
 
-async function fetchTasks() {
-  const response = await fetch("/api/tasks", { cache: "no-store" });
+async function fetchTasks(workspaceId = null) {
+  const url = workspaceId
+    ? `/api/tasks?workspaceId=${workspaceId}`
+    : "/api/tasks";
+  const response = await fetch(url, { cache: "no-store" });
   const responseBody = await response.json().catch(() => null);
 
   if (!response.ok) {
@@ -21,7 +24,7 @@ function getErrorMessage(error) {
   return error instanceof Error ? error.message : "Unable to load tasks.";
 }
 
-export function useTasks() {
+export function useTasks(workspaceId = null) {
   const [tasks, setTasks] = useState([]);
   const [todayDateKey, setTodayDateKey] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +35,7 @@ export function useTasks() {
     setError("");
 
     try {
-      const loadedTasks = await fetchTasks();
+      const loadedTasks = await fetchTasks(workspaceId);
       setTasks(loadedTasks);
       setTodayDateKey(getTodayDateKey());
     } catch (loadError) {
@@ -40,12 +43,12 @@ export function useTasks() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     let isMounted = true;
 
-    fetchTasks()
+    fetchTasks(workspaceId)
       .then((loadedTasks) => {
         if (isMounted) {
           setTasks(loadedTasks);
@@ -66,7 +69,7 @@ export function useTasks() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [workspaceId]);
 
   return { tasks, todayDateKey, isLoading, error, reloadTasks };
 }

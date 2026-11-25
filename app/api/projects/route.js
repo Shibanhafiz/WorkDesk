@@ -1,17 +1,37 @@
-import { connection } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { validateProjectInput } from "@/app/lib/projectValidation";
+import { getSessionUser, requireWorkspaceMember } from "@/app/lib/session";
+import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
 
-export async function GET() {
-  await connection();
+export async function GET(request) {
+  const user = await getSessionUser(prisma);
+  if (!user) return errorResponse("Authentication required.", 401);
+
+  const { searchParams } = new URL(request.url);
+  const workspaceId = searchParams.get("workspaceId");
+
+  let where = {};
+  if (workspaceId) {
+    const membership = await prisma.workspaceMember.findFirst({
+      where: { userId: user.id, workspaceId },
+    });
+    if (!membership) return errorResponse("You are not a member of this workspace.", 403);
+    where = { workspaceId };
+  } else {
+    const memberships = await prisma.workspaceMember.findMany({
+      where: { userId: user.id },
+      select: { workspaceId: true },
+    });
+    where = { workspaceId: { in: memberships.map((m) => m.workspaceId) } };
+  }
 
   try {
     const projects = await prisma.project.findMany({
+      where,
       orderBy: { updatedAt: "desc" },
       include: { _count: { select: { tasks: true } } },
     });
-
     return Response.json(projects);
   } catch (error) {
     logApiError("Project", "load", error);
@@ -20,6 +40,23 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  const user = await getSessionUser(prisma);
+  if (!user) return errorResponse("Authentication required.", 401);
+
+  const { searchParams } = new URL(request.url);
+  const workspaceId = searchParams.get("workspaceId");
+  if (!workspaceId) return errorResponse("workspaceId is required.", 400);
+
+  const access = await requireWorkspaceMember(prisma, workspaceId, "MANAGER");
+  if (access.error) {
+    return errorResponse(
+      access.error === "Insufficient permissions."
+        ? "Only managers and admins can create projects."
+        : access.error,
+      access.status,
+    );
+  }
+
   let input;
   try {
     input = await request.json();
@@ -28,14 +65,20 @@ export async function POST(request) {
   }
 
   const validation = validateProjectInput(input);
-  if (validation.error) {
-    return errorResponse(validation.error, 400);
-  }
+  if (validation.error) return errorResponse(validation.error, 400);
 
   try {
     const project = await prisma.project.create({
-      data: validation.data,
+      data: { ...validation.data, workspaceId },
       include: { _count: { select: { tasks: true } } },
+    });
+    await recordActivity(prisma, {
+      workspaceId,
+      actorId: user.id,
+      type: ACTIVITY_TYPES.PROJECT_CREATED,
+      targetId: project.id,
+      targetType: "PROJECT",
+      metadata: { name: project.name },
     });
     return Response.json(project, { status: 201 });
   } catch (error) {

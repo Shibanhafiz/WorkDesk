@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { getTodayDateKey } from "./taskInsights";
 
-export async function fetchProjects() {
-  const response = await fetch("/api/projects", { cache: "no-store" });
+export async function fetchProjects(workspaceId = null) {
+  const url = workspaceId
+    ? `/api/projects?workspaceId=${workspaceId}`
+    : "/api/projects";
+  const response = await fetch(url, { cache: "no-store" });
   const responseBody = await response.json().catch(() => null);
 
   if (!response.ok) {
@@ -21,7 +24,7 @@ function getErrorMessage(error) {
   return error instanceof Error ? error.message : "Unable to load projects.";
 }
 
-export function useProjects() {
+export function useProjects(workspaceId = null) {
   const [projects, setProjects] = useState([]);
   const [todayDateKey, setTodayDateKey] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +35,7 @@ export function useProjects() {
     setError("");
 
     try {
-      const loadedProjects = await fetchProjects();
+      const loadedProjects = await fetchProjects(workspaceId);
       setProjects(loadedProjects);
       setTodayDateKey(getTodayDateKey());
     } catch (loadError) {
@@ -40,12 +43,12 @@ export function useProjects() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     let isMounted = true;
 
-    fetchProjects()
+    fetchProjects(workspaceId)
       .then((loadedProjects) => {
         if (isMounted) {
           setProjects(loadedProjects);
@@ -66,7 +69,7 @@ export function useProjects() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [workspaceId]);
 
   return {
     projects,
