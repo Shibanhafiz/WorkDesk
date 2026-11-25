@@ -1,65 +1,268 @@
+
 # WorkDesk
 
-WorkDesk is a small project and task-management app built with JavaScript, the
-Next.js App Router, React, Tailwind CSS, Prisma ORM 7, and SQLite.
+<p align="center">
+  <strong>A Simple Workspace for Projects and Tasks</strong>
+  <br />
+  Organize projects, manage tasks, and track progress in one place.
+</p>
 
-## Run locally
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-App_Router-black?logo=next.js" />
+  <img src="https://img.shields.io/badge/React-19-149ECA?logo=react" />
+  <img src="https://img.shields.io/badge/JavaScript-ES6%2B-F7DF1E?logo=javascript" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss" />
+  <img src="https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma" />
+  <img src="https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite" />
+</p>
 
-Requirements: Node.js 24 LTS or a newer supported release, and npm.
+---
 
-```bash
-npm install
-npm run db:deploy
-npm run dev
+## Product Preview
+
+<p align="center">
+  <img
+    src="workdesk-dashboard-preview.jpeg"
+    alt="AI-generated WorkDesk dashboard concept"
+    width="100%"
+  />
+</p>
+
+<p align="center">
+  <sub>AI-generated visual concept of WorkDesk.</sub>
+</p>
+
+---
+
+## Overview
+
+WorkDesk is a lightweight project and task management application built to provide a centralized workspace for organizing projects, managing daily tasks, tracking deadlines, and monitoring progress.
+
+The application uses Next.js and React for the frontend, API route handlers for backend operations, Prisma ORM for database access, and SQLite for local data persistence.
+
+### Core Objectives
+
+- Organize projects in one place.
+- Manage tasks and priorities.
+- Track deadlines and upcoming work.
+- Monitor project progress.
+- Review task statistics and productivity insights.
+
+## Features
+
+### Dashboard
+- Overview of saved task statistics.
+- Recent task activity.
+- Priority distribution summary.
+- Database-backed task insights.
+
+### Project Management
+- Create and edit projects.
+- Search projects by name.
+- Filter and sort projects.
+- Archive and restore projects.
+- View individual project details.
+- Monitor project schedules and task progress.
+
+### Task Management
+- Create, edit, and delete tasks.
+- Search tasks by title and description.
+- Filter by status, priority, and project.
+- Sort task listings.
+- Update task status.
+- Assign tasks to projects or leave them unassigned.
+- Set optional due dates.
+- View individual task details.
+
+### Upcoming Tasks
+Tasks are organized into four categories:
+
+| Category | Description |
+|---|---|
+| Overdue | Past-due tasks that remain incomplete |
+| Due Soon | Tasks due today or within seven days |
+| Later | Tasks scheduled beyond seven days |
+| No Due Date | Tasks without a deadline |
+
+### Analytics
+- Task status distribution.
+- Priority distribution.
+- Statistics based on saved task records.
+
+### Settings
+- Appearance preferences.
+- Display density.
+- Default task priority.
+- Delete confirmation preference.
+- Display name customization.
+
+Settings are stored in browser localStorage and are not synchronized between accounts or browsers.
+
+## Application Pages
+
+| Page | Route | Description |
+|---|---|---|
+| Dashboard | `/` | Overview of projects and tasks |
+| Projects | `/projects` | Project organization |
+| Project Details | `/projects/[id]` | Individual project information |
+| Tasks | `/tasks` | Task management |
+| Upcoming | `/upcoming` | Deadline organization |
+| Analytics | `/analytics` | Task statistics |
+| Settings | `/settings` | Application preferences |
+
+## Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| JavaScript | Application language |
+| Next.js App Router | Application framework |
+| React | User interface |
+| Tailwind CSS | Styling |
+| Prisma ORM 7 | Database access |
+| SQLite | Relational database |
+| Node.js | Runtime environment |
+| npm | Package management |
+
+---
+
+## Architecture
+
+WorkDesk follows a layered architecture. The frontend communicates with backend API routes, which validate requests and use Prisma to interact with SQLite.
+
+### System Architecture
+
+```mermaid
+flowchart TD
+    U["User"] --> FE["Next.js Application"]
+    FE --> RC["React Components"]
+    RC --> API["API Route Handlers"]
+    API --> V["Server Validation"]
+    V --> ORM["Prisma ORM"]
+    ORM --> DB[("SQLite Database")]
+    DB --> ORM
+    ORM --> API
+    API --> RC
+    RC --> UI["Updated Interface"]
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The development command
-generates Prisma Client before starting Next.js.
+### Task Creation Workflow
 
-When changing `prisma/schema.prisma`, create and apply a development migration:
+```mermaid
+sequenceDiagram
+    actor User
+    participant Form as Task Form
+    participant UI as React Component
+    participant API as Next.js API
+    participant Prisma
+    participant DB as SQLite
 
-```bash
-npm run db:migrate -- --name describe_your_change
+    User->>Form: Enter task details
+    Form->>UI: Submit task
+    UI->>API: POST /api/tasks
+    API->>API: Validate request
+    API->>Prisma: Create task
+    Prisma->>DB: Save task
+    DB-->>Prisma: Saved record
+    Prisma-->>API: Return task
+    API-->>UI: JSON response
+    UI-->>User: Update task list
 ```
 
-The local database is `prisma/workdesk.db`. It is ignored by Git and remains on
-disk when the app or development server restarts.
+### Application Navigation
 
-## How task creation works
+```mermaid
+flowchart TD
+    Dashboard --> Projects
+    Dashboard --> Tasks
+    Dashboard --> Upcoming
+    Dashboard --> Analytics
+    Dashboard --> Settings
+    Projects --> ProjectDetails
+    ProjectDetails --> Tasks
+    Tasks --> TaskDetails
+    Upcoming --> TaskDetails
+```
 
-1. The form in `app/components/Form.js` collects task fields on the All
-   Tasks page (`app/tasks/page.js`).
-2. `app/components/TaskManagement.js` sends them with `fetch()` to `POST /api/tasks`.
-3. `app/api/tasks/route.js` validates the request and calls Prisma Client.
-4. Prisma uses the SQLite adapter in `app/lib/prisma.js` to save the task.
-5. The API returns the saved task; the task page updates its React state.
-   The Overview and other read-only pages fetch the saved task list through
-   `app/lib/useTasks.js`.
+## Database Design
 
-The same API is used for task loading (`GET /api/tasks`), edits and status
-changes (`PATCH /api/tasks/[id]`), and deletion (`DELETE /api/tasks/[id]`).
+WorkDesk uses two primary relational models: `Project` and `Task`.
 
-## Pages and preferences
+### Entity Relationship Diagram
 
-- `/` shows database-backed statistics, recent tasks, and the priority summary.
-- `/projects` provides project creation, editing, search, status filtering,
-  sorting, and archiving.
-- `/projects/[id]` shows a project's schedule, task progress, and task register.
-- `/tasks` provides task creation, editing, deletion, title/description search,
-  status, priority, and project filters, sorting, quick status updates, project
-  assignment, and task details.
-- `/upcoming` separates overdue, due-soon (today through the next seven days),
-  later upcoming, and undated tasks.
-- `/analytics` summarizes status and priority counts from saved tasks.
-- `/settings` controls browser-local appearance, display density, default task
-  priority, delete confirmation, and display name.
+```mermaid
+erDiagram
+    PROJECT ||--o{ TASK : contains
 
-`app/components/Sidebar.js` uses Next.js links for navigation. The shared
-`PreferencesProvider` stores preferences in this browser's `localStorage` and
-applies theme and density choices across pages. These settings are not tied to
-an account and do not sync between browsers. Task insights are calculated from
-the list returned by the database-backed task API; no sample statistics are
-hardcoded.
+    PROJECT {
+        string id PK
+        string name
+        string description
+        string status
+        datetime startDate
+        datetime dueDate
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    TASK {
+        string id PK
+        string title
+        string description
+        string status
+        string priority
+        datetime dueDate
+        string projectId FK
+        datetime createdAt
+        datetime updatedAt
+    }
+```
+
+### Database Relationships
+
+- One project can contain multiple tasks.
+- A task belongs to zero or one project.
+- `Task.projectId` is nullable.
+- Unassigned tasks are supported.
+- Archiving a project does not delete its tasks.
+
+### Task Fields
+
+| Field | Description |
+|---|---|
+| `title` | Required task title |
+| `description` | Optional description |
+| `status` | TODO, IN_PROGRESS, DONE |
+| `priority` | LOW, MEDIUM, HIGH |
+| `dueDate` | Optional deadline |
+| `projectId` | Optional project relationship |
+| `createdAt` | Creation timestamp |
+| `updatedAt` | Last update timestamp |
+
+Default status is `TODO`, and default priority is `MEDIUM`.
+
+---
+
+## API Reference
+
+### Task Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/tasks` | Retrieve tasks |
+| POST | `/api/tasks` | Create a task |
+| PATCH | `/api/tasks/[id]` | Update a task |
+| DELETE | `/api/tasks/[id]` | Delete a task |
+
+### Project Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/projects` | Retrieve projects |
+| POST | `/api/projects` | Create a project |
+| GET | `/api/projects/[id]` | Retrieve project details |
+| PATCH | `/api/projects/[id]` | Update a project |
+
+Incoming data is validated by backend API routes before database operations.
 
 ## Project Structure
 
@@ -74,10 +277,6 @@ WorkDesk/
 │   │       ├── [id]/
 │   │       └── route.js
 │   ├── components/
-│   │   ├── TaskForm.js
-│   │   ├── TaskManagement.js
-│   │   ├── Sidebar.js
-│   │   └── ...
 │   ├── lib/
 │   │   ├── prisma.js
 │   │   └── useTasks.js
@@ -91,8 +290,7 @@ WorkDesk/
 │   └── prisma/
 ├── prisma/
 │   ├── migrations/
-│   ├── schema.prisma
-│   └── workdesk.db
+│   └── schema.prisma
 ├── public/
 ├── tests/
 ├── prisma.config.mjs
@@ -100,215 +298,107 @@ WorkDesk/
 └── README.md
 ```
 
-## Projects and task relationships
+This is a simplified overview. Generated files and local database files may not be committed.
 
-Each `Project` has many `Task` records, while each task can belong to zero or
-one project. `Task.projectId` is a nullable foreign key, so existing tasks stay
-unassigned after the Projects migration. Archiving only changes the project's
-status; it does not delete or detach tasks. A project can be edited to restore
-it from the archived status.
+## Getting Started
 
-The database relationship is defined in `prisma/schema.prisma`. The non-
-destructive migration in `prisma/migrations/20261116152458_add_projects/`
-creates the Project table and copies all existing task columns into the new
-table shape, leaving `projectId` null. The foreign key uses `ON DELETE SET NULL`
-as an additional safeguard if a project is removed outside the application.
-The application itself does not provide permanent project deletion.
+### Prerequisites
 
-Project APIs are `GET`/`POST /api/projects` and `GET`/`PATCH /api/projects/[id]`.
-Task APIs accept optional `projectId` values (or `null` to unassign a task).
-Project and task request fields are validated on the server.
+- Node.js 24 LTS or a newer supported release.
+- npm.
+- Git.
 
-## Database setup
-
-- `prisma/schema.prisma` describes `Project`, `Task`, their relationship, and
-  their enums/defaults.
-- `prisma.config.mjs` points Prisma CLI commands at the schema, migrations, and
-  local SQLite file.
-- `prisma/migrations/` contains SQL migrations generated by Prisma.
-- `app/lib/prisma.js` reuses one Prisma Client instance during development.
-- `generated/prisma/` is generated code and is not committed.
-
-The browser only calls the API. It does not import Prisma or connect directly
-to SQLite.
-
-When developing against an existing database, create and apply a migration:
+### 1. Clone the Repository
 
 ```bash
-npm run db:migrate -- --name describe_your_change
+git clone https://github.com/Shibanhafiz/WorkDesk.git
 ```
 
-For an existing deployment, apply committed migrations with
-`npm run db:deploy`.
-
-## API fields
-
-- `title`: required, trimmed string (up to 100 characters).
-- `priority`: `LOW`, `MEDIUM`, or `HIGH` (defaults to `MEDIUM`).
-- `status`: `TODO`, `IN_PROGRESS`, or `DONE` (defaults to `TODO`).
-- `description`: optional, trimmed string (up to 1,000 characters).
-- `dueDate`: optional, valid `YYYY-MM-DD` calendar date.
-- `projectId`: optional CUID for a project, or `null` for an unassigned task.
-- `createdAt` and `updatedAt`: maintained by Prisma.
-
-Projects require a non-empty `name`; description, status, start date, and due
-date are validated by the project API. A start date cannot be later than its
-due date.
-
-## Validation and tests
-
-The form checks values to provide immediate feedback, and the task API validates
-them again before writing to SQLite. Task insight calculations and input
-validation have focused tests. Run them with:
+### 2. Navigate to the Project
 
 ```bash
-npm test
-npm run lint
-npm run build
+cd WorkDesk
 ```
 
-## Deployment notes
-
-The SQLite database is a local file at `prisma/workdesk.db`; database files are
-ignored by Git, and no credentials or environment variables are currently
-required. The local SQLite URL is configured in both `prisma.config.mjs` and
-`app/lib/prisma.js`. This setup is for local development. A production host must
-provide durable, writable storage for SQLite and keep both URLs pointed at the
-same database file. Ephemeral/serverless filesystems can lose the database when
-instances restart, so use a persistent volume or a database service supported
-by the chosen host. Apply migrations with `npm run db:deploy` before starting
-the production server.
-
-## V2 features
-
-WorkDesk V2 adds multi-workspace collaboration on top of the task register:
-
-- Workspaces (personal and team) with workspace-scoped projects and tasks.
-- Workspace membership with roles: `ADMIN`, `MANAGER`, `MEMBER`.
-- Role hierarchy: `ADMIN > MANAGER > MEMMBER`, enforced server-side.
-- Invitations with expiring, single-use tokens and role-scoped acceptance.
-- Task assignment to workspace members.
-- Comments on tasks with author-only edit and author-or-admin delete.
-- Server-generated notifications (task assigned, comment added, mention, invitation received).
-- Activity logging for task and comment changes.
-- Projects with schedule, progress, and a task register.
-
-## Architecture
-
-```mermaid
-erDiagram
-  User ||--o{ WorkspaceMember : "memberships"
-  User ||--o{ Task : "assigned tasks"
-  User ||--o{ Comment : "authored"
-  User ||--o{ Notification : "receives"
-  User ||--o{ Activity : "performs"
-  Workspace ||--o{ WorkspaceMember : "members"
-  Workspace ||--o{ Project : "projects"
-  Workspace ||--o{ Task : "tasks"
-  Workspace ||--o{ Invitation : "invitations"
-  Workspace ||--o{ Activity : "events"
-  Project ||--o{ Task : "tasks"
-  Task ||--o{ Comment : "comments"
-```
-
-Role hierarchy: `ADMIN (3) > MANAGER (2) > MEMBER (1)`. A user may have a
-different role in each workspace.
-
-## Environment variables
-
-Copy `.env.example` to `.env` and adjust:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | Prisma datasource URL for SQLite | `file:./prisma/workdesk.db` |
-
-No other credentials or environment variables are required for local
-development.
-
-## Database setup and migrations
+### 3. Install Dependencies
 
 ```bash
 npm install
-npm run db:generate      # generate Prisma Client
-npm run db:deploy        # apply committed migrations
-npm run dev              # start the dev server (runs prisma generate first via predev)
 ```
 
-The local database is `prisma/workdesk.db` (SQLite). It is ignored by Git and
-persists across restarts. Schema changes require a new development migration:
+### 4. Initialize the Database
+
+```bash
+npm run db:deploy
+```
+
+### 5. Start the Development Server
+
+```bash
+npm run dev
+```
+
+### 6. Open the Application
+
+Visit:
+
+`http://localhost:3000`
+
+## Database Management
+
+### Apply Existing Migrations
+
+```bash
+npm run db:deploy
+```
+
+### Create a New Migration
 
 ```bash
 npm run db:migrate -- --name describe_your_change
 ```
 
-### Backup and recovery
-
-The database is a single SQLite file at `prisma/workdesk.db`. To back it up,
-copy the file (and any `-wal`/`-shm` sidecar files if present) to durable
-storage:
+### Open Prisma Studio
 
 ```bash
-# example: one-off backup
-cp prisma/workdesk.db backups/workdesk-$(date +%F).db
+npm run db:studio
 ```
 
-To restore, stop the server, replace `prisma/workdesk.db` with the backup,
-then restart and run `npm run db:deploy` to confirm migrations are applied.
+The local database is stored at `prisma/workdesk.db` and is ignored by Git.
 
-## Deployment
+## Testing and Code Quality
 
-This is a local-first SQLite application. A production host must provide
-durable, writable storage for the SQLite file so it survives instance
-restarts; ephemeral/serverless filesystems will lose data. Use a persistent
-volume or a managed database service supported by the host, and keep
-`DATABASE_URL` (and `app/lib/prisma.js`) pointed at the same database file.
-
-Before starting the production server:
+### Run Tests
 
 ```bash
-npm run db:generate
-npm run db:deploy
-npm start
+npm test
 ```
 
-## Security notes and known limitations
-
-**Authentication is not yet implemented.** There are no registration, login,
-logout, or session-expiration routes and no `Session` model. API routes
-identify the caller through a `userId` query parameter, which can be spoofed,
-and `GET /api/tasks` without parameters returns every task across all
-workspaces. Treat this as a **release blocker**: before any deployment that
-exposes the API, add session-based authentication (cookie or bearer token)
-and a middleware that resolves the caller from the session rather than from
-user-controlled query input, scope every list endpoint to the caller's
-workspace(s), and add CSRF protection for state-changing mutations.
-
-Other security characteristics:
-- API error responses return only generic messages; detailed errors go to
-  server logs (`console.error`). Do not forward those logs to clients.
-- Invitations use 256-bit cryptographically random tokens and expire after 7
-  days by default.
-- Comment author and notification recipient are always set server-side from
-  the verified caller, never from the request body.
-
-Accessibility: pages use `aria-label`, `aria-labelledby`, `role="alert"`,
-`role="status"`, `role="progressbar"`, `aria-current="page"`, `sr-only`
-labels, and visible `focus-visible` outlines. The layout is responsive with
-breakpoints at 960px, 700px, and 420px, plus `prefers-reduced-motion` support.
-
-## Testing
-
-Unit and integration tests run with Node's built-in test runner:
+### Run ESLint
 
 ```bash
-npm test      # unit + lib integration tests
-npm run lint  # ESLint
-npm run build # production build + TypeScript check
+npm run lint
 ```
 
-Tests cover role hierarchy, workspace/task access enforcement, comment
-permissions, notification building and delivery, invitation tokens and expiry,
-and project/task validation. There are no end-to-end browser tests yet.
+### Production Build
+
+```bash
+npm run build
+```
+
+## Deployment Considerations
+
+WorkDesk currently uses a local SQLite database.
+
+For production deployment:
+
+- Use durable, writable storage.
+- Configure the database URL correctly.
+- Ensure the application and Prisma use the same database location.
+- Apply committed migrations before starting the application.
+- Avoid temporary filesystems for persistent database storage.
+
+A persistent volume or suitable database service is necessary for reliable production data storage.
 
 ## WorkDesk V2 entry flows
 
@@ -325,10 +415,54 @@ and project/task validation. There are no end-to-end browser tests yet.
   email is sent unless `INVITATION_WEBHOOK_URL` is configured.
 - `GET /api/health` provides a database-backed health check.
 
+## Current limitations and remaining setup
+
+- The local database is SQLite. A managed PostgreSQL migration is required
+  before internet-facing multi-user deployment.
+- Email delivery, email verification and OAuth are not configured; no provider
+  is claimed as active.
+- The in-memory rate limiter needs a shared store for multi-instance hosting.
+- No browser automation suite or Lighthouse audit is included yet.
+- Permanent project deletion through the UI is intentionally not provided.
+
 ## Documentation and operations
 
 See `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/TESTING.md`,
 `docs/DEPLOYMENT.md` and `docs/DATABASE.md` for detailed notes. Environment
-variables are listed in `.env.example`. SQLite is the current database; a
-managed PostgreSQL migration is still required before internet-facing
-multi-user deployment. CI runs lint, tests and build on push and pull request.
+variables are listed in `.env.example`. CI runs lint, tests and build on push
+and pull request.
+
+## Learning Outcomes
+
+WorkDesk demonstrates practical experience with:
+
+- React components and state management.
+- Next.js App Router.
+- Dynamic routing.
+- Frontend and backend communication.
+- API development and CRUD operations.
+- Server-side validation.
+- Relational database design.
+- Prisma ORM and SQLite.
+- Database migrations.
+- Testing and code quality.
+
+---
+
+## Author
+
+**Shiban Hafiz**
+
+B.E. Artificial Intelligence and Machine Learning Student
+
+- GitHub: [@Shibanhafiz](https://github.com/Shibanhafiz)
+- Portfolio: [Portfolio Website](https://shibanhafiz-portfolio.vercel.app/)
+- Repository: [WorkDesk](https://github.com/Shibanhafiz/WorkDesk)
+
+---
+
+<p align="center">
+  <strong>WorkDesk</strong>
+  <br />
+  Organize projects. Manage tasks. Track progress.
+</p>
