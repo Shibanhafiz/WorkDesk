@@ -123,6 +123,14 @@ export default function TaskDetailsDialog({
           </dd>
         </div>
         <div>
+          <dt>Created by</dt>
+          <dd>
+            {task.createdBy
+              ? task.createdBy.name || task.createdBy.email
+              : "Not recorded"}
+          </dd>
+        </div>
+        <div>
           <dt>Created</dt>
           <dd>{formatTimestamp(task.createdAt)}</dd>
         </div>

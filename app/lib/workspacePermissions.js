@@ -219,8 +219,8 @@ export async function verifyTaskAccess(
 
 /**
  * Verify that a target user can be assigned a task in the workspace.
- * The target must be a workspace member with an assignable specialization
- * (Developer or Designer).
+ * The target must be a current member of the same workspace — cross-workspace
+ * assignment is never allowed. Specialization is returned for display only.
  * Returns { error, member, specialization } or { error: null, member, specialization }.
  */
 export async function verifyAssignableMember(
@@ -230,7 +230,7 @@ export async function verifyAssignableMember(
   actorUserId,
   actorRole
 ) {
-  // Only MANAGER+ can assign tasks
+  // Only MANAGER+ can assign tasks to others
   if (!canManageWork(actorRole)) {
     return {
       error: "Only managers and admins can assign tasks.",
@@ -259,15 +259,6 @@ export async function verifyAssignableMember(
   }
 
   const specialization = membership.user ? membership.user.specialization : null;
-
-  // Target must have an assignable specialization (Developer or Designer)
-  if (!canBeAssigned(specialization)) {
-    return {
-      error: "Only Developers and Designers can be assigned tasks.",
-      member: membership,
-      specialization,
-    };
-  }
 
   return { error: null, member: membership, specialization };
 }

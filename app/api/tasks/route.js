@@ -2,10 +2,7 @@ import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logTaskApiError } from "@/app/lib/taskApiResponse";
 import { validateTaskInput } from "@/app/lib/taskValidation";
 import { requireWorkspaceMember, getSessionUser } from "@/app/lib/session";
-import {
-  verifyAssignableMember,
-  canManageWork,
-} from "@/app/lib/workspacePermissions";
+import { authorizeAssignment } from "@/app/lib/taskAssignment";
 import {
   createNotificationOnce,
   taskAssignmentNotification,
@@ -16,6 +13,9 @@ const taskInclude = {
   project: { select: { id: true, name: true, status: true } },
   assignee: {
     select: { id: true, name: true, email: true, avatarUrl: true, specialization: true },
+  },
+  createdBy: {
+    select: { id: true, name: true, email: true },
   },
   history: {
     orderBy: { createdAt: "asc" },
@@ -109,28 +109,21 @@ export async function POST(request) {
   if (access.error) return errorResponse(access.error, access.status);
 
   try {
-    if (validation.data.assigneeId && validation.data.assigneeId !== user.id) {
-      if (!canManageWork(access.role)) {
-        return errorResponse(
-          "Only managers and admins can assign tasks to other members.",
-          403,
-        );
-      }
-      const assignable = await verifyAssignableMember(
-        prisma, workspaceId, validation.data.assigneeId, user.id, access.role,
-      );
-      if (assignable.error) return errorResponse(assignable.error, 403);
-    } else if (validation.data.assigneeId === user.id) {
-      const membership = await prisma.workspaceMember.findFirst({
-        where: { userId: user.id, workspaceId },
-      });
-      if (!membership) {
-        return errorResponse("Assignee must be a member of this workspace.", 403);
-      }
-    }
+    const assignment = await authorizeAssignment(prisma, {
+      workspaceId,
+      actorId: user.id,
+      actorRole: access.role,
+      assigneeId: validation.data.assigneeId ?? null,
+    });
+    if (assignment.error) return errorResponse(assignment.error, 403);
 
     const task = await prisma.task.create({
-      data: { ...validation.data, workspaceId },
+      data: {
+        ...validation.data,
+        assigneeId: assignment.assigneeId,
+        workspaceId,
+        createdById: user.id,
+      },
       include: taskInclude,
     });
 
@@ -150,7 +143,11 @@ export async function POST(request) {
         type: ACTIVITY_TYPES.TASK_ASSIGNED,
         targetId: task.id,
         targetType: "TASK",
-        metadata: { assigneeId: task.assigneeId, title: task.title },
+        metadata: {
+          fromAssigneeId: null,
+          toAssigneeId: task.assigneeId,
+          title: task.title,
+        },
       });
       const notification = taskAssignmentNotification({
         assigneeId: task.assigneeId,

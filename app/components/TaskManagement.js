@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { usePreferences } from "./PreferencesProvider";
 import PageHeader from "./PageHeader";
 import TaskCard from "./TaskCard";
 import TaskDetailsDialog from "./TaskDetailsDialog";
 import TaskForm from "./TaskForm";
+import TaskRegisterState from "./TaskRegisterState";
 import LifecycleActionDialog from "./LifecycleActionDialog";
 import { sortTasks } from "../lib/taskInsights";
 import {
@@ -80,6 +82,27 @@ async function fetchMembers(workspaceId) {
   }
 
   return data;
+}
+
+/**
+ * Opens the task referenced by a `?task=<id>` query parameter (used by
+ * notification links) once the matching task has loaded.
+ */
+function TaskDeepLink({ tasks, enabled, onViewTask }) {
+  const searchParams = useSearchParams();
+  const taskId = searchParams.get("task");
+  const openedFor = useRef(null);
+
+  useEffect(() => {
+    if (!enabled || !taskId || openedFor.current === taskId) return;
+    const task = tasks.find((item) => item.id === taskId);
+    if (task) {
+      openedFor.current = taskId;
+      onViewTask(task);
+    }
+  }, [enabled, taskId, tasks, onViewTask]);
+
+  return null;
 }
 
 export default function TaskManagement({
@@ -391,6 +414,14 @@ export default function TaskManagement({
 
   return (
     <div className={`page-frame${embedded ? " task-management-embedded" : ""}`}>
+      <Suspense fallback={null}>
+        <TaskDeepLink
+          tasks={tasks}
+          enabled={!isLoading}
+          onViewTask={setViewingTask}
+        />
+      </Suspense>
+
       {embedded ? (
         <div className="section-heading-row embedded-task-heading">
           <div>
@@ -567,51 +598,20 @@ export default function TaskManagement({
           </button>
         )}
 
-        {isLoading ? (
-          <p role="status" className="state-panel">
-            Loading your task register...
-          </p>
-        ) : loadError ? (
-          <div className="state-panel">
-            <p role="alert" className="state-error">
-              Tasks could not be loaded. {loadError}
-            </p>
-            <button
-              type="button"
-              onClick={loadTasks}
-              className="text-link-button"
-            >
-              Try again
-            </button>
-          </div>
-        ) : visibleTasks.length > 0 ? (
-          <div className="task-register">
-            {visibleTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onEdit={openEditTaskForm}
-                onViewTask={setViewingTask}
-                onDelete={deleteTask}
-                onAction={requestLifecycleAction}
-                availableActions={availableActionsFor(task)}
-                isBusy={busyTaskId === task.id}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state">
-            <h3 className="empty-state-title">
-              {hasNoScopedTasks ? "No tasks yet" : "No tasks match these filters"}
-            </h3>
-            <p className="empty-state-copy">
-              {hasNoScopedTasks
-                ? scopedProjectId
-                  ? "Add a task to start organizing this project."
-                  : "Add a task to start organizing your work."
-                : "Clear the filters or try a different search."}
-            </p>
-            {hasNoScopedTasks ? (
+        <TaskRegisterState
+          isLoading={isLoading}
+          loadError={loadError}
+          isEmpty={visibleTasks.length === 0}
+          emptyTitle={hasNoScopedTasks ? "No tasks yet" : "No tasks match these filters"}
+          emptyCopy={
+            hasNoScopedTasks
+              ? scopedProjectId
+                ? "Add a task to start organizing this project."
+                : "Add a task to start organizing your work."
+              : "Clear the filters or try a different search."
+          }
+          emptyAction={
+            hasNoScopedTasks ? (
               <button
                 type="button"
                 onClick={openNewTaskForm}
@@ -627,9 +627,25 @@ export default function TaskManagement({
               >
                 Clear filters
               </button>
-            )}
+            )
+          }
+          onRetry={loadTasks}
+        >
+          <div className="task-register">
+            {visibleTasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                onEdit={openEditTaskForm}
+                onViewTask={setViewingTask}
+                onDelete={deleteTask}
+                onAction={requestLifecycleAction}
+                availableActions={availableActionsFor(task)}
+                isBusy={busyTaskId === task.id}
+              />
+            ))}
           </div>
-        )}
+        </TaskRegisterState>
       </section>
 
       {isTaskFormOpen && (

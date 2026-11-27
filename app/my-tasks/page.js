@@ -12,6 +12,11 @@ import {
   STATUS_TONES,
   availableLifecycleActions,
 } from "../lib/taskLifecycle";
+import {
+  filterAssignedTasks,
+  summarizeAssignedTasks,
+  isOverdue,
+} from "../lib/myTasks";
 
 const priorityLabels = { LOW: "Low", MEDIUM: "Medium", HIGH: "High" };
 
@@ -29,14 +34,6 @@ function formatDate(value) {
   if (!value) return "No due date";
   return new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
     new Date(`${String(value).slice(0, 10)}T00:00:00`),
-  );
-}
-
-function isOverdue(task, today) {
-  return (
-    task.status !== "DONE" &&
-    Boolean(task.dueDate) &&
-    String(task.dueDate).slice(0, 10) < (today ?? "")
   );
 }
 
@@ -59,9 +56,11 @@ export default function MyTasksPage() {
   const [actionError, setActionError] = useState("");
   const [feedback, setFeedback] = useState(null);
 
-  const assignedTasks = tasks.filter(
-    (task) => user?.id && task.assignee?.id === user.id,
-  );
+  const assignedTasks = filterAssignedTasks(tasks, {
+    userId: user?.id,
+    todayDateKey,
+  });
+  const summary = summarizeAssignedTasks(tasks, user?.id, todayDateKey);
   const projects = [
     ...new Map(
       assignedTasks
@@ -72,29 +71,15 @@ export default function MyTasksPage() {
   const workspaceNames = new Map(
     workspaces.map((workspace) => [workspace.id, workspace.name]),
   );
-  const normalizedSearch = search.trim().toLowerCase();
 
-  const visibleTasks = assignedTasks.filter((task) => {
-    const dueDate = task.dueDate ? String(task.dueDate).slice(0, 10) : "";
-    const matchesSearch =
-      !normalizedSearch ||
-      task.title.toLowerCase().includes(normalizedSearch) ||
-      (task.description ?? "").toLowerCase().includes(normalizedSearch) ||
-      (task.project?.name ?? "").toLowerCase().includes(normalizedSearch);
-    const matchesStatus = statusFilter === "all" || task.status === statusFilter;
-    const matchesPriority =
-      priorityFilter === "all" || task.priority === priorityFilter;
-    const matchesProject =
-      projectFilter === "all" ||
-      (projectFilter === "none" ? !task.projectId : task.projectId === projectFilter);
-    const matchesDue =
-      dueFilter === "all" ||
-      (dueFilter === "overdue"
-        ? isOverdue(task, todayDateKey)
-        : dueFilter === "none"
-          ? !dueDate
-          : Boolean(dueDate));
-    return matchesSearch && matchesStatus && matchesPriority && matchesProject && matchesDue;
+  const visibleTasks = filterAssignedTasks(tasks, {
+    userId: user?.id,
+    todayDateKey,
+    search,
+    status: statusFilter,
+    priority: priorityFilter,
+    project: projectFilter,
+    due: dueFilter,
   });
 
   function actionsFor(task) {
@@ -134,7 +119,7 @@ export default function MyTasksPage() {
         number="08"
         title="My Tasks"
         description="Tasks assigned to you across the workspaces you can access."
-        meta={`${assignedTasks.length} ASSIGNED · WORKSPACE-AWARE`}
+        meta={`${summary.assigned} ASSIGNED · ${summary.overdue} OVERDUE · ${summary.upcoming} UPCOMING`}
       />
 
       {feedback ? (
@@ -155,6 +140,8 @@ export default function MyTasksPage() {
             </h2>
             <p className="section-description">
               Showing {visibleTasks.length} of {assignedTasks.length} assigned tasks
+              {summary.overdue > 0 ? ` · ${summary.overdue} overdue` : ""}
+              {summary.upcoming > 0 ? ` · ${summary.upcoming} due soon` : ""}
             </p>
           </div>
         </div>
@@ -219,6 +206,7 @@ export default function MyTasksPage() {
             >
               <option value="all">Any due date</option>
               <option value="overdue">Overdue</option>
+              <option value="upcoming">Due within 7 days</option>
               <option value="scheduled">Scheduled</option>
               <option value="none">No due date</option>
             </select>

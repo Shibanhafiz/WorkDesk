@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import { usePreferences } from "./PreferencesProvider";
 import { useWorkspaces } from "../lib/useWorkspaces";
-import { useSession } from "./SessionProvider";
+import { useSession } from "../components/SessionProvider";
+import { useUnreadNotificationCount } from "../lib/useNotifications";
 import { ROLE_LABELS } from "../lib/workspacePermissions";
 
 const navigationGroups = [
@@ -18,15 +19,16 @@ const navigationGroups = [
       { href: "/my-tasks", label: "My Tasks", index: "04" },
       { href: "/upcoming", label: "Upcoming", index: "05" },
       { href: "/analytics", label: "Analytics", index: "06" },
+      { href: "/notifications", label: "Notifications", index: "07", badge: "unread" },
     ],
   },
   {
     label: "Team",
-    items: [{ href: "/team", label: "Members", index: "07" }],
+    items: [{ href: "/team", label: "Members", index: "08" }],
   },
   {
     label: "Preferences",
-    items: [{ href: "/settings", label: "Settings", index: "08" }],
+    items: [{ href: "/settings", label: "Settings", index: "09" }],
   },
 ];
 
@@ -38,6 +40,7 @@ function SidebarNavigation() {
     setCurrentWorkspace,
     selectionError,
   } = useWorkspaces();
+  const { unreadCount } = useUnreadNotificationCount();
 
   return (
     <nav aria-label="Main navigation" className="sidebar-nav">
@@ -62,6 +65,14 @@ function SidebarNavigation() {
                   {item.index}
                 </span>
                 {item.label}
+                {item.badge === "unread" && unreadCount > 0 ? (
+                  <span
+                    className="nav-badge"
+                    aria-label={`${unreadCount} unread notifications`}
+                  >
+                    {unreadCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -119,16 +130,18 @@ function SidebarNavigationFallback() {
         <span className="nav-link">01&nbsp; Overview</span>
         <span className="nav-link">02&nbsp; Projects</span>
         <span className="nav-link">03&nbsp; All Tasks</span>
-        <span className="nav-link">04&nbsp; Upcoming</span>
-        <span className="nav-link">05&nbsp; Analytics</span>
+        <span className="nav-link">04&nbsp; My Tasks</span>
+        <span className="nav-link">05&nbsp; Upcoming</span>
+        <span className="nav-link">06&nbsp; Analytics</span>
+        <span className="nav-link">07&nbsp; Notifications</span>
       </div>
       <div className="nav-group">
         <p className="nav-group-label">Team</p>
-        <span className="nav-link">06&nbsp; Members</span>
+        <span className="nav-link">08&nbsp; Members</span>
       </div>
       <div className="nav-group">
         <p className="nav-group-label">Preferences</p>
-        <span className="nav-link">07&nbsp; Settings</span>
+        <span className="nav-link">09&nbsp; Settings</span>
       </div>
     </nav>
   );

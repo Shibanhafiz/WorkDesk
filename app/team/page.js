@@ -421,6 +421,8 @@ export default function TeamPage() {
 
       {workspaceId ? (
         <TeamWorkload
+          key={workspaceId}
+          workspaceId={workspaceId}
           members={members}
           tasks={tasks}
           todayDateKey={todayDateKey}

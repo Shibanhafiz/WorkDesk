@@ -248,6 +248,20 @@ select {
   color: var(--accent-strong);
 }
 
+.nav-badge {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface-raised);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 16px;
+  text-align: center;
+}
+
 .sidebar-profile {
   border-top: 1px solid var(--border);
   padding: 17px 25px 21px;
@@ -1154,6 +1168,11 @@ a:focus-visible {
   gap: 18px 24px;
   border-bottom: 1px solid var(--border);
   padding: 18px 0;
+}
+
+.task-register-row.is-unread {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .task-record-main {

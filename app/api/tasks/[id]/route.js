@@ -2,10 +2,7 @@ import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logTaskApiError } from "@/app/lib/taskApiResponse";
 import { validateTaskInput } from "@/app/lib/taskValidation";
 import { requireWorkspaceMember } from "@/app/lib/session";
-import {
-  verifyAssignableMember,
-  canManageWork,
-} from "@/app/lib/workspacePermissions";
+import { authorizeAssignment, canEditTask } from "@/app/lib/taskAssignment";
 import {
   createNotificationOnce,
   taskAssignmentNotification,
@@ -20,6 +17,9 @@ const taskInclude = {
   project: { select: { id: true, name: true, status: true } },
   assignee: {
     select: { id: true, name: true, email: true, avatarUrl: true, specialization: true },
+  },
+  createdBy: {
+    select: { id: true, name: true, email: true },
   },
   history: {
     orderBy: { createdAt: "asc" },
@@ -53,11 +53,18 @@ export async function PATCH(request, { params }) {
   const access = await requireWorkspaceMember(prisma, task.workspaceId, "MEMBER");
   if (access.error) return errorResponse(access.error, access.status);
 
-  const isAssignee = task.assigneeId === access.userId;
   const isSelfAssignment =
     validation.data.assigneeId === access.userId &&
     Object.keys(validation.data).every((field) => field === "assigneeId");
-  if (!isAssignee && !canManageWork(access.role) && !isSelfAssignment) {
+
+  if (
+    !canEditTask({
+      actorRole: access.role,
+      actorId: access.userId,
+      taskAssigneeId: task.assigneeId,
+      isSelfAssignment,
+    })
+  ) {
     return errorResponse("You cannot edit this task.", 403);
   }
 
@@ -69,23 +76,22 @@ export async function PATCH(request, { params }) {
       if (!project) return errorResponse("Project not found in this workspace.", 404);
     }
 
-    if (validation.data.assigneeId && validation.data.assigneeId !== access.userId) {
-      if (!canManageWork(access.role)) {
-        return errorResponse(
-          "Only managers and admins can assign tasks to other members.",
-          403,
-        );
-      }
-      const assignable = await verifyAssignableMember(
-        prisma, task.workspaceId, validation.data.assigneeId, access.userId, access.role,
-      );
-      if (assignable.error) return errorResponse(assignable.error, 403);
+    let assigneeId;
+    if (Object.hasOwn(validation.data, "assigneeId")) {
+      const assignment = await authorizeAssignment(prisma, {
+        workspaceId: task.workspaceId,
+        actorId: access.userId,
+        actorRole: access.role,
+        assigneeId: validation.data.assigneeId,
+      });
+      if (assignment.error) return errorResponse(assignment.error, 403);
+      assigneeId = assignment.assigneeId;
     }
 
     const previousAssigneeId = task.assigneeId;
     const updatedTask = await prisma.task.update({
       where: { id },
-      data: validation.data,
+      data: { ...validation.data, assigneeId },
       include: taskInclude,
     });
 

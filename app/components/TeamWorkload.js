@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Dialog from "./Dialog";
 import { STATUS_LABELS } from "../lib/taskLifecycle";
+import { WORKLOAD_STATUS_GROUPS } from "../lib/teamWorkload";
 
 const priorityLabels = { LOW: "Low", MEDIUM: "Medium", HIGH: "High" };
 
@@ -16,6 +17,7 @@ function isOverdue(task, todayDateKey) {
 }
 
 export default function TeamWorkload({
+  workspaceId = null,
   members,
   tasks,
   todayDateKey,
@@ -30,19 +32,46 @@ export default function TeamWorkload({
   const [statFilter, setStatFilter] = useState("all");
   const [error, setError] = useState("");
   const [busyTaskId, setBusyTaskId] = useState(null);
+  const [workload, setWorkload] = useState(null);
+  const [workloadError, setWorkloadError] = useState("");
+  const [workloadVersion, setWorkloadVersion] = useState(0);
 
-  const rows = members.map((member) => {
-    const memberTasks = tasks.filter((task) => task.assigneeId === member.userId);
-    return {
-      member,
-      total: memberTasks.length,
-      inProgress: memberTasks.filter((task) => task.status === "IN_PROGRESS").length,
-      completed: memberTasks.filter((task) => task.status === "DONE").length,
-      overdue: memberTasks.filter((task) => isOverdue(task, todayDateKey)).length,
+  useEffect(() => {
+    if (!workspaceId) return;
+
+    let isMounted = true;
+
+    fetch(`/api/workspaces/${workspaceId}/workload`, { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error || "Unable to load team workload.");
+        }
+        return data;
+      })
+      .then((data) => {
+        if (isMounted && Array.isArray(data)) {
+          setWorkload(data);
+          setWorkloadError("");
+        }
+      })
+      .catch((loadError) => {
+        if (isMounted) {
+          setWorkloadError(
+            loadError instanceof Error ? loadError.message : "Unable to load team workload.",
+          );
+        }
+      });
+
+    return () => {
+      isMounted = false;
     };
-  });
+  }, [workspaceId, workloadVersion]);
 
-  const selected = rows.find((row) => row.member.userId === selectedMemberId) ?? null;
+  const rows = workload ?? [];
+  const isWorkloadLoading = workload === null && !workloadError;
+
+  const selected = rows.find((row) => row.userId === selectedMemberId) ?? null;
   const projects = [...new Map(
     tasks.filter((task) => task.project).map((task) => [task.project.id, task.project.name]),
   )];
@@ -58,9 +87,10 @@ export default function TeamWorkload({
 
   const selectedTasks = selected
     ? tasks
-        .filter((task) => task.assigneeId === selected.member.userId)
+        .filter((task) => task.assigneeId === selected.userId)
         .filter((task) => {
-          if (statFilter === "inProgress") return task.status === "IN_PROGRESS";
+          if (statFilter === "todo") return WORKLOAD_STATUS_GROUPS.todo.includes(task.status);
+          if (statFilter === "inProgress") return WORKLOAD_STATUS_GROUPS.inProgress.includes(task.status);
           if (statFilter === "completed") return task.status === "DONE";
           if (statFilter === "overdue") return isOverdue(task, todayDateKey);
           return true;
@@ -82,6 +112,7 @@ export default function TeamWorkload({
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Unable to reassign task.");
       await onTasksChanged?.();
+      setWorkloadVersion((version) => version + 1);
       setSelectedMemberId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to reassign task.");
@@ -92,6 +123,7 @@ export default function TeamWorkload({
 
   const statColumns = [
     { key: "total", label: "Assigned" },
+    { key: "todo", label: "To do" },
     { key: "inProgress", label: "In progress" },
     { key: "completed", label: "Completed" },
     { key: "overdue", label: "Overdue" },
@@ -111,7 +143,13 @@ export default function TeamWorkload({
         </div>
       </div>
 
-      {rows.length > 0 ? (
+      {isWorkloadLoading ? (
+        <p role="status" className="state-panel">Loading workload...</p>
+      ) : workloadError ? (
+        <div className="state-panel">
+          <p role="alert" className="state-error">{workloadError}</p>
+        </div>
+      ) : rows.length > 0 ? (
         <div className="assignment-table">
           <div className="assignment-row assignment-head" aria-hidden="true">
             <span>Member</span>
@@ -119,16 +157,16 @@ export default function TeamWorkload({
               <span key={column.key}>{column.label}</span>
             ))}
           </div>
-          {rows.map(({ member, total, inProgress, completed, overdue }) => (
-            <div key={member.userId} className="assignment-row">
+          {rows.map((row) => (
+            <div key={row.userId} className="assignment-row">
               <button
                 type="button"
                 className="workload-member workload-link"
-                onClick={() => openMember(member.userId)}
+                onClick={() => openMember(row.userId)}
               >
-                {member.avatarUrl ? (
+                {row.avatarUrl ? (
                   <Image
-                    src={member.avatarUrl}
+                    src={row.avatarUrl}
                     alt=""
                     width={28}
                     height={28}
@@ -137,20 +175,20 @@ export default function TeamWorkload({
                   />
                 ) : (
                   <span className="assignee-avatar" aria-hidden="true">
-                    {(member.name || member.email || "?").slice(0, 1).toUpperCase()}
+                    {(row.name || row.email || "?").slice(0, 1).toUpperCase()}
                   </span>
                 )}
-                <span>{member.name || member.email}</span>
+                <span>{row.name || row.email}</span>
               </button>
               {statColumns.map((column) => {
-                const value = { total, inProgress, completed, overdue }[column.key];
+                const value = row[column.key] ?? 0;
                 return (
                   <button
                     key={column.key}
                     type="button"
                     className="workload-stat"
-                    onClick={() => openMember(member.userId, column.key)}
-                    aria-label={`${column.label} tasks for ${member.name || member.email}: ${value}`}
+                    onClick={() => openMember(row.userId, column.key)}
+                    aria-label={`${column.label} tasks for ${row.name || row.email}: ${value}`}
                   >
                     {value}
                   </button>
@@ -170,10 +208,10 @@ export default function TeamWorkload({
           <div>
             <p className="section-kicker">WORKLOAD / MEMBER</p>
             <h2 id="member-detail-heading" className="dialog-heading">
-              {selected.member.name || selected.member.email}
+              {selected.name || selected.email}
             </h2>
             <p className="dialog-description">
-              {selected.total} assigned · {selected.inProgress} in progress · {selected.completed} completed · {selected.overdue} overdue
+              {selected.total} assigned · {selected.todo} to do · {selected.inProgress} in progress · {selected.completed} completed · {selected.overdue} overdue
             </p>
           </div>
 
