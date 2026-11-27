@@ -107,12 +107,11 @@ export default function TaskDetailsDialog({
               <>
                 {task.assignee.name || task.assignee.email}
                 {task.assignee.specialization ? (
-                  <span
-                    className={`priority-tag ${
-                      getSpecializationTone(task.assignee.specialization)
-                    }`}
-                    style={{ fontSize: "10px", marginLeft: "6px" }}
-                  >
+                    <span
+                      className={`priority-tag specialization-tag ${
+                        getSpecializationTone(task.assignee.specialization)
+                      }`}
+                    >
                     {getSpecializationLabel(task.assignee.specialization)}
                   </span>
                 ) : null}

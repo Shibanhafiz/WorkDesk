@@ -11,7 +11,7 @@ export default function AuthGate({ children }) {
   const { user, isLoading } = useSession();
   const pathname = usePathname();
   const router = useRouter();
-  const isPublic = PUBLIC_PATHS.includes(pathname);
+  const isPublic = PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/invite/");
   const isOnboarding = pathname === "/onboarding";
 
   useEffect(() => {

@@ -11,6 +11,7 @@ export default function InviteMemberDialog({ workspaceId, actorRole, onClose, on
   const [error, setError] = useState("");
   const [invitation, setInvitation] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [copyMessage, setCopyMessage] = useState("");
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -36,6 +37,15 @@ export default function InviteMemberDialog({ workspaceId, actorRole, onClose, on
   const inviteLink = invitation
     ? `${typeof window === "undefined" ? "" : window.location.origin}/invite/${invitation.token}`
     : "";
+
+  async function copyInviteLink() {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopyMessage("Invitation link copied.");
+    } catch {
+      setCopyMessage("Unable to copy the link. Select and copy it manually.");
+    }
+  }
 
   return (
     <Dialog labelledBy="invite-member-heading" onClose={onClose}>
@@ -64,10 +74,11 @@ export default function InviteMemberDialog({ workspaceId, actorRole, onClose, on
           <button
             type="button"
             className="button-secondary"
-            onClick={() => navigator.clipboard?.writeText(inviteLink)}
+            onClick={copyInviteLink}
           >
             Copy link
           </button>
+          {copyMessage ? <p role="status" className="section-description">{copyMessage}</p> : null}
           {invitation.delivered ? (
             <p className="section-description">Invitation delivered by your configured provider.</p>
           ) : (

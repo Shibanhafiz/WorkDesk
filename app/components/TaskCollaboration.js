@@ -233,6 +233,9 @@ export default function TaskCollaboration({
             </li>
           ))}
         </ol>
+        {comments.length === 0 ? (
+          <p className="section-description">No comments yet.</p>
+        ) : null}
         <form onSubmit={addComment} className="form-stack dialog-form">
           <label className="form-field">
             <span className="field-label">Add a comment</span>
@@ -283,6 +286,9 @@ export default function TaskCollaboration({
             </li>
           ))}
         </ol>
+        {issues.length === 0 ? (
+          <p className="section-description">No issues recorded yet.</p>
+        ) : null}
         <form onSubmit={addIssue} className="form-stack dialog-form">
           <label className="form-field">
             <span className="field-label">Issue description</span>
@@ -348,6 +354,9 @@ export default function TaskCollaboration({
             </li>
           ))}
         </ol>
+        {attachments.length === 0 ? (
+          <p className="section-description">No attachments yet.</p>
+        ) : null}
         <form onSubmit={uploadAttachment} className="form-stack dialog-form">
           <label className="form-field">
             <span className="field-label">Upload image or document (max 10 MB)</span>

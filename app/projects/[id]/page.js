@@ -60,5 +60,5 @@ async function ProjectPageContent({ params }) {
     notFound();
   }
 
-  return <ProjectDetails initialProject={project} />;
+  return <ProjectDetails initialProject={project} workspaceId={project.workspaceId} />;
 }

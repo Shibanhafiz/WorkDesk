@@ -11,7 +11,12 @@ export async function GET() {
       where: { userId: user.id },
       include: { workspace: true },
     });
-    return Response.json(memberships.map((m) => m.workspace));
+    return Response.json(
+      memberships.map((membership) => ({
+        ...membership.workspace,
+        role: membership.role,
+      })),
+    );
   } catch (error) {
     logApiError("Workspace", "load", error);
     return errorResponse("Unable to load workspaces. Please try again.", 500);

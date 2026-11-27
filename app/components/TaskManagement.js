@@ -108,16 +108,18 @@ function TaskDeepLink({ tasks, enabled, onViewTask }) {
 export default function TaskManagement({
   scopedProjectId = null,
   scopedProjectName = "",
+  workspaceId: scopedWorkspaceId = null,
   embedded = false,
   onTaskChange,
 }) {
   const { preferences } = usePreferences();
   const { currentWorkspace } = useWorkspaces();
+  const workspaceId = scopedWorkspaceId ?? currentWorkspace?.id ?? null;
   const {
     projects,
     error: projectsError,
     reloadProjects,
-  } = useProjects(currentWorkspace?.id ?? null);
+  } = useProjects(workspaceId);
   const { user: sessionUser } = useSession();
   const userId = sessionUser?.id ?? "";
   const [tasks, setTasks] = useState([]);
@@ -144,7 +146,6 @@ export default function TaskManagement({
   // the UI only hides actions — the backend re-validates every permission.
   const currentUserRole =
     members.find((m) => m.userId === userId)?.role ?? sessionUser?.role ?? "MEMBER";
-  const workspaceId = currentWorkspace?.id ?? null;
 
   const loadTasks = useCallback(async () => {
     setIsLoading(true);
@@ -190,11 +191,11 @@ export default function TaskManagement({
 
   // Load members when workspace changes
   useEffect(() => {
-    if (!currentWorkspace?.id) return;
+    if (!workspaceId) return;
 
     let isMounted = true;
 
-    fetchMembers(currentWorkspace.id)
+    fetchMembers(workspaceId)
       .then((loadedMembers) => {
         if (isMounted) {
           setMembers(loadedMembers);
@@ -207,7 +208,7 @@ export default function TaskManagement({
     return () => {
       isMounted = false;
     };
-  }, [currentWorkspace?.id]);
+  }, [workspaceId]);
 
   const scopedTasks = scopedProjectId
     ? tasks.filter((task) => task.projectId === scopedProjectId)
@@ -371,8 +372,6 @@ export default function TaskManagement({
   async function performLifecycleAction({ action, reason, reviewComment }) {
     if (!lifecycleTask) return;
     const taskId = lifecycleTask.id;
-    const workspaceId = currentWorkspace?.id;
-
     setBusyTaskId(taskId);
     setLifecycleError("");
     setFeedback(null);
@@ -677,7 +676,7 @@ export default function TaskManagement({
           onAction={requestLifecycleAction}
           isBusy={busyTaskId === viewingTask.id}
           actionError={lifecycleAction ? lifecycleError : ""}
-          workspaceId={currentWorkspace?.id ?? null}
+          workspaceId={workspaceId}
           userId={userId}
           canManage={isReviewer()}
         />

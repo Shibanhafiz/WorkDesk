@@ -56,7 +56,8 @@ export function SessionProvider({ children }) {
       throw new Error(data.error || "Unable to switch workspaces.");
     }
     setWorkspaceIdState(data.workspaceId ?? nextWorkspaceId);
-  }, []);
+    await reload();
+  }, [reload]);
 
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });

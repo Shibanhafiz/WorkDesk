@@ -5,6 +5,7 @@ import StatCard from "../components/StatCard";
 import TaskLoadState from "../components/TaskLoadState";
 import { useTasks } from "../lib/useTasks";
 import { calculateTaskMetrics } from "../lib/taskInsights";
+import { useWorkspaces } from "../lib/useWorkspaces";
 
 const statusItems = [
   { value: "TODO", label: "To do", tone: "status-todo" },
@@ -65,7 +66,10 @@ function DistributionPanel({ number, heading, items, counts, total }) {
 }
 
 export default function AnalyticsPage() {
-  const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks();
+  const { currentWorkspace } = useWorkspaces();
+  const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks(
+    currentWorkspace?.id ?? null,
+  );
   const metrics = calculateTaskMetrics(tasks, todayDateKey);
   const stats = [
     {

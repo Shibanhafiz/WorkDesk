@@ -34,7 +34,7 @@ function formatDate(value) {
   }).format(new Date(`${dateKey}T00:00:00`));
 }
 
-export default function ProjectDetails({ initialProject }) {
+export default function ProjectDetails({ initialProject, workspaceId }) {
   const [project, setProject] = useState(initialProject);
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
   const [projectFormError, setProjectFormError] = useState("");
@@ -223,6 +223,7 @@ export default function ProjectDetails({ initialProject }) {
         <TaskManagement
           scopedProjectId={project.id}
           scopedProjectName={project.name}
+          workspaceId={workspaceId}
           embedded
           onTaskChange={refreshProject}
         />

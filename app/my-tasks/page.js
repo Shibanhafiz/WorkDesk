@@ -71,6 +71,9 @@ export default function MyTasksPage() {
   const workspaceNames = new Map(
     workspaces.map((workspace) => [workspace.id, workspace.name]),
   );
+  const workspaceRoles = new Map(
+    workspaces.map((workspace) => [workspace.id, workspace.role]),
+  );
 
   const visibleTasks = filterAssignedTasks(tasks, {
     userId: user?.id,
@@ -87,7 +90,7 @@ export default function MyTasksPage() {
       status: task.status,
       assigneeId: task.assignee?.id ?? null,
       userId: user?.id,
-      role: user?.role,
+      role: workspaceRoles.get(task.workspaceId) ?? user?.role,
     });
   }
 
@@ -237,49 +240,63 @@ export default function MyTasksPage() {
                   </h3>
                 </div>
                 {groupTasks.length > 0 ? (
-                  <div className="assignment-table">
-                    <div className="assignment-row assignment-head" aria-hidden="true">
-                      <span>Task</span>
-                      <span>Project</span>
-                      <span>Priority</span>
-                      <span>Status</span>
-                      <span>Due date</span>
-                      <span>Workspace</span>
-                    </div>
-                    {groupTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className={`assignment-row${isOverdue(task, todayDateKey) ? " is-overdue" : ""}`}
-                      >
-                        <Link href={`/tasks?task=${task.id}`} className="assignment-title">
-                          {task.title}
-                        </Link>
-                        <span>{task.project?.name ?? "No project"}</span>
-                        <span className={`priority-tag priority-${String(task.priority).toLowerCase()}`}>
-                          {priorityLabels[task.priority] ?? task.priority}
-                        </span>
-                        <span className={`status-tag ${STATUS_TONES[task.status] ?? ""}`}>
-                          {STATUS_LABELS[task.status] ?? task.status}
-                        </span>
-                        <span>{formatDate(task.dueDate)}</span>
-                        <span className="assignment-row-actions">
-                          <span>{workspaceNames.get(task.workspaceId) ?? "Workspace"}</span>
-                          {actionsFor(task).map((action) => (
-                            <button
-                              key={action.key}
-                              type="button"
-                              className={`record-action${action.danger ? " record-action-danger" : ""}`}
-                              onClick={() => {
-                                setLifecycle({ task, action: action.key });
-                                setActionError("");
-                              }}
-                            >
-                              {action.label}
-                            </button>
-                          ))}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="assignment-table-wrap">
+                    <table className="assignment-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Task</th>
+                          <th scope="col">Project</th>
+                          <th scope="col">Priority</th>
+                          <th scope="col">Status</th>
+                          <th scope="col">Due date</th>
+                          <th scope="col">Workspace</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupTasks.map((task) => (
+                          <tr
+                            key={task.id}
+                            className={isOverdue(task, todayDateKey) ? "is-overdue" : undefined}
+                          >
+                            <th scope="row">
+                              <Link href={`/tasks?task=${task.id}`} className="assignment-title">
+                                {task.title}
+                              </Link>
+                            </th>
+                            <td>{task.project?.name ?? "No project"}</td>
+                            <td>
+                              <span className={`priority-tag priority-${String(task.priority).toLowerCase()}`}>
+                                {priorityLabels[task.priority] ?? task.priority}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`status-tag ${STATUS_TONES[task.status] ?? ""}`}>
+                                {STATUS_LABELS[task.status] ?? task.status}
+                              </span>
+                            </td>
+                            <td>{formatDate(task.dueDate)}</td>
+                            <td>
+                              <div className="assignment-row-actions">
+                                <span>{workspaceNames.get(task.workspaceId) ?? "Workspace"}</span>
+                                {actionsFor(task).map((action) => (
+                                  <button
+                                    key={action.key}
+                                    type="button"
+                                    className={`record-action${action.danger ? " record-action-danger" : ""}`}
+                                    onClick={() => {
+                                      setLifecycle({ task, action: action.key });
+                                      setActionError("");
+                                    }}
+                                  >
+                                    {action.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
                   <div className="empty-state">

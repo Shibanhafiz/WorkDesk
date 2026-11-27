@@ -6,6 +6,7 @@ import TaskLoadState from "../components/TaskLoadState";
 import TaskSummaryCard from "../components/TaskSummaryCard";
 import { useTasks } from "../lib/useTasks";
 import { groupTasksByDueDate } from "../lib/taskInsights";
+import { useWorkspaces } from "../lib/useWorkspaces";
 
 function TaskGroup({ number, heading, description, tasks, emptyMessage }) {
   const headingId = `${heading.toLowerCase().replaceAll(" ", "-")}-heading`;
@@ -37,7 +38,10 @@ function TaskGroup({ number, heading, description, tasks, emptyMessage }) {
 }
 
 export default function UpcomingPage() {
-  const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks();
+  const { currentWorkspace } = useWorkspaces();
+  const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks(
+    currentWorkspace?.id ?? null,
+  );
   const groups = groupTasksByDueDate(tasks, todayDateKey);
 
   return (

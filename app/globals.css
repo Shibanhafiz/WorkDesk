@@ -1199,7 +1199,7 @@ a:focus-visible {
 }
 
 .record-action {
-  min-height: 31px;
+  min-height: 36px;
   border: 1px solid transparent;
   border-radius: 2px;
   background: transparent;
@@ -1272,7 +1272,8 @@ a:focus-visible {
 .dialog-close {
   border: 0;
   background: transparent;
-  padding: 5px;
+  min-height: 36px;
+  padding: 5px 8px;
   color: var(--muted);
   font-size: 11px;
   cursor: pointer;
@@ -1556,7 +1557,7 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
   }
 
   .nav-link {
-    min-height: 36px;
+    min-height: 44px;
     gap: 7px;
     padding: 7px 10px;
     font-size: 11px;
@@ -1717,6 +1718,14 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
 
   .task-record-actions {
     justify-content: flex-start;
+  }
+
+  .record-action,
+  .status-control,
+  .dialog-close,
+  .workload-link,
+  .workload-stat {
+    min-height: 44px;
   }
 
   .settings-section {
@@ -2437,45 +2446,6 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
   }
 }
 
-.assignee-picker {
-  position: relative;
-}
-
-.assignee-trigger {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.assignee-trigger-copy,
-.assignee-option-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.assignee-trigger-copy strong,
-.assignee-option-copy strong {
-  overflow: hidden;
-  color: var(--foreground);
-  font-size: 12px;
-  font-weight: 620;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.assignee-trigger-copy small,
-.assignee-option-copy small {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .assignee-avatar {
   display: grid;
   width: 28px;
@@ -2497,43 +2467,9 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
   color: var(--faint);
 }
 
-.assignee-menu {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  width: 100%;
-  max-height: 240px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  background: var(--surface-raised);
-  box-shadow: 0 12px 30px rgb(0 0 0 / 12%);
-}
-
-.assignee-option {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 10px;
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  padding: 9px 11px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.assignee-option:last-child {
-  border-bottom: 0;
-}
-
-.assignee-option:hover,
-.assignee-option:focus-visible {
-  background: var(--accent-soft);
-}
-
-.assignee-option.is-selected {
-  background: var(--soft);
+.specialization-tag {
+  margin-left: 6px;
+  font-size: 10px;
 }
 
 .assignment-filters {
@@ -2549,34 +2485,40 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
 
 .assignment-table {
   width: 100%;
+  border-collapse: collapse;
   border-top: 1px solid var(--border);
 }
 
-.assignment-row {
-  display: grid;
-  grid-template-columns: minmax(160px, 2fr) repeat(5, minmax(90px, 1fr));
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 12px 4px;
+.assignment-table-wrap {
+  overflow-x: auto;
+}
+
+.assignment-table th,
+.assignment-table td {
+  min-width: 90px;
+  padding: 12px 8px;
   border-bottom: 1px solid var(--border);
+  color: var(--foreground);
   font-size: 12px;
+  text-align: left;
+  vertical-align: middle;
 }
 
-.assignment-row > span,
-.assignment-row > a {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.assignment-head {
+.assignment-table thead th {
   color: var(--muted);
   font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.assignment-table tbody th:first-child,
+.assignment-table tbody td:first-child {
+  min-width: 160px;
+}
+
+.assignment-table tr.is-overdue > * {
+  background: var(--danger-soft);
 }
 
 .assignment-title {
@@ -2585,7 +2527,6 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
   text-decoration: none;
 }
 
-.assignee-option-copy strong,
 .assignment-title:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -2595,28 +2536,6 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-@media (max-width: 960px) {
-  .assignment-row {
-    grid-template-columns: minmax(140px, 2fr) repeat(3, minmax(80px, 1fr));
-  }
-
-  .assignment-row > span:nth-child(5),
-  .assignment-row > span:nth-child(6) {
-    display: none;
-  }
-}
-
-@media (max-width: 700px) {
-  .assignment-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .assignment-row > span:nth-child(3),
-  .assignment-row > span:nth-child(4) {
-    display: none;
-  }
 }
 
 .nav-workspace-error {
@@ -2647,6 +2566,7 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
 .workload-link,
 .workload-stat {
   display: inline-flex;
+  min-height: 36px;
   align-items: center;
   gap: 8px;
   border: 0;
@@ -2735,10 +2655,6 @@ html[data-theme="dark"] .hover\:bg-slate-100:hover {
 
 .my-task-group {
   margin-top: 28px;
-}
-
-.assignment-row.is-overdue {
-  background: var(--danger-soft);
 }
 
 .assignment-row-actions {

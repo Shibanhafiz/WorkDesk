@@ -205,9 +205,6 @@ export default function TeamPage() {
   const { user: sessionUser } = useSession();
   const workspaceId = currentWorkspace?.id ?? null;
   const { tasks, todayDateKey, reloadTasks } = useTasks(workspaceId);
-  const canManage = sessionUser?.role === "ADMIN";
-  const canInvite = canManage || sessionUser?.role === "MANAGER";
-
   const [members, setMembers] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -216,6 +213,12 @@ export default function TeamPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const currentWorkspaceRole =
+    currentWorkspace?.role ??
+    members.find((member) => member.userId === sessionUser?.id)?.role ??
+    sessionUser?.role;
+  const canManage = currentWorkspaceRole === "ADMIN";
+  const canInvite = canManage || currentWorkspaceRole === "MANAGER";
 
   const fetchTeamData = useCallback(async () => {
     if (!workspaceId) return null;
@@ -278,6 +281,20 @@ export default function TeamPage() {
       await loadMembers();
     } catch (err) {
       setFeedback({ type: "error", message: err.message });
+    }
+  }
+
+  async function copyInvitationLink(invitation) {
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/invite/${invitation.token}`,
+      );
+      setFeedback({ type: "success", message: "Invitation link copied." });
+    } catch {
+      setFeedback({
+        type: "error",
+        message: "Unable to copy the invitation link. Copy it from the invitation dialog instead.",
+      });
     }
   }
 
@@ -427,7 +444,7 @@ export default function TeamPage() {
           tasks={tasks}
           todayDateKey={todayDateKey}
           workspaceName={currentWorkspace?.name ?? ""}
-          canManage={canManage || sessionUser?.role === "MANAGER"}
+          canManage={canInvite}
           onTasksChanged={reloadTasks}
         />
       ) : null}
@@ -467,9 +484,7 @@ export default function TeamPage() {
                     <button
                       type="button"
                       className="record-action"
-                      onClick={() => navigator.clipboard?.writeText(
-                        `${window.location.origin}/invite/${invitation.token}`,
-                      )}
+                      onClick={() => copyInvitationLink(invitation)}
                     >
                       Copy link
                     </button>
@@ -521,7 +536,7 @@ export default function TeamPage() {
       {showInviteDialog ? (
         <InviteMemberDialog
           workspaceId={workspaceId}
-          actorRole={sessionUser?.role}
+          actorRole={currentWorkspaceRole}
           onClose={() => setShowInviteDialog(false)}
           onInvited={loadMembers}
         />

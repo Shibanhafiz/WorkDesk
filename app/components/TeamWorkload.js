@@ -150,20 +150,25 @@ export default function TeamWorkload({
           <p role="alert" className="state-error">{workloadError}</p>
         </div>
       ) : rows.length > 0 ? (
-        <div className="assignment-table">
-          <div className="assignment-row assignment-head" aria-hidden="true">
-            <span>Member</span>
-            {statColumns.map((column) => (
-              <span key={column.key}>{column.label}</span>
-            ))}
-          </div>
-          {rows.map((row) => (
-            <div key={row.userId} className="assignment-row">
-              <button
-                type="button"
-                className="workload-member workload-link"
-                onClick={() => openMember(row.userId)}
-              >
+        <div className="assignment-table-wrap">
+          <table className="assignment-table">
+            <thead>
+              <tr>
+                <th scope="col">Member</th>
+                {statColumns.map((column) => (
+                  <th key={column.key} scope="col">{column.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.userId}>
+                  <th scope="row">
+                    <button
+                      type="button"
+                      className="workload-member workload-link"
+                      onClick={() => openMember(row.userId)}
+                    >
                 {row.avatarUrl ? (
                   <Image
                     src={row.avatarUrl}
@@ -179,23 +184,27 @@ export default function TeamWorkload({
                   </span>
                 )}
                 <span>{row.name || row.email}</span>
-              </button>
-              {statColumns.map((column) => {
-                const value = row[column.key] ?? 0;
-                return (
-                  <button
-                    key={column.key}
-                    type="button"
-                    className="workload-stat"
-                    onClick={() => openMember(row.userId, column.key)}
-                    aria-label={`${column.label} tasks for ${row.name || row.email}: ${value}`}
-                  >
-                    {value}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+                    </button>
+                  </th>
+                  {statColumns.map((column) => {
+                    const value = row[column.key] ?? 0;
+                    return (
+                      <td key={column.key}>
+                        <button
+                          type="button"
+                          className="workload-stat"
+                          onClick={() => openMember(row.userId, column.key)}
+                          aria-label={`${column.label} tasks for ${row.name || row.email}: ${value}`}
+                        >
+                          {value}
+                        </button>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="empty-state">
@@ -279,6 +288,7 @@ export default function TeamWorkload({
                       disabled={busyTaskId === task.id}
                       onChange={(event) => reassign(task, event.target.value)}
                     >
+                      <option value="">Unassigned</option>
                       {members.map((member) => (
                         <option key={member.userId} value={member.userId}>
                           {member.name || member.email}
