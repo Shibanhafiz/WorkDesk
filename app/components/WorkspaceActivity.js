@@ -20,6 +20,8 @@ const actionLabels = {
   ISSUE_UPDATED: "updated an issue",
   ATTACHMENT_ADDED: "added an attachment",
   ATTACHMENT_DELETED: "deleted an attachment",
+  LINK_ADDED: "added a link",
+  LINK_REMOVED: "removed a link",
   INVITATION_SENT: "sent an invitation",
   INVITATION_REVOKED: "revoked an invitation",
   MEMBER_JOINED: "joined the workspace",

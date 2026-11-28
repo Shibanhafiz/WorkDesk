@@ -26,11 +26,15 @@ export default function TaskCollaboration({
   const [comments, setComments] = useState([]);
   const [issues, setIssues] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [links, setLinks] = useState([]);
   const [timeline, setTimeline] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [issueText, setIssueText] = useState("");
   const [issueSeverity, setIssueSeverity] = useState("MEDIUM");
   const [uploadFile, setUploadFile] = useState(null);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkError, setLinkError] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -47,17 +51,24 @@ export default function TaskCollaboration({
 
   const loadData = useCallback(async () => {
     if (!workspaceId) return null;
-    const [loadedComments, loadedIssues, loadedAttachments, loadedTimeline] =
-      await Promise.all([
-        getJson(`/api/tasks/${taskId}/comments?${base}`),
-        getJson(`/api/tasks/${taskId}/issues?${base}`),
-        getJson(`/api/tasks/${taskId}/attachments?${base}`),
-        getJson(`/api/tasks/${taskId}/activity?${base}`),
-      ]);
+    const [
+      loadedComments,
+      loadedIssues,
+      loadedAttachments,
+      loadedLinks,
+      loadedTimeline,
+    ] = await Promise.all([
+      getJson(`/api/tasks/${taskId}/comments?${base}`),
+      getJson(`/api/tasks/${taskId}/issues?${base}`),
+      getJson(`/api/tasks/${taskId}/attachments?${base}`),
+      getJson(`/api/tasks/${taskId}/links?${base}`),
+      getJson(`/api/tasks/${taskId}/activity?${base}`),
+    ]);
     return {
       comments: loadedComments,
       issues: loadedIssues,
       attachments: loadedAttachments,
+      links: loadedLinks,
       timeline: loadedTimeline,
     };
   }, [taskId, base, workspaceId]);
@@ -67,6 +78,7 @@ export default function TaskCollaboration({
     setComments(data.comments);
     setIssues(data.issues);
     setAttachments(data.attachments);
+    setLinks(data.links);
     setTimeline(data.timeline);
   }, []);
 
@@ -202,6 +214,55 @@ export default function TaskCollaboration({
     }
   }
 
+  async function addLink(event) {
+    event.preventDefault();
+    const url = linkUrl.trim();
+    if (!url) return;
+    if (!/^https?:\/\/\S+$/i.test(url) || url.length > 2048) {
+      setLinkError("Enter a link starting with http:// or https://.");
+      return;
+    }
+    setLinkError("");
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/tasks/${taskId}/links?${base}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, title: linkTitle.trim() || null }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Unable to add link.");
+      setLinkUrl("");
+      setLinkTitle("");
+      await reload();
+    } catch (err) {
+      setLinkError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteLink(link) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/tasks/${taskId}/links/${link.id}?${base}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Unable to delete link.");
+      }
+      await reload();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!workspaceId) {
     return (
       <p className="section-description">
@@ -316,6 +377,94 @@ export default function TaskCollaboration({
           <div className="form-actions">
             <button type="submit" disabled={busy || !issueText.trim()} className="button-secondary">
               Record issue
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section aria-labelledby="task-links-heading" className="collab-section">
+        <h3 id="task-links-heading" className="section-title">
+          Links
+        </h3>
+        <ol className="comment-list">
+          {links.map((link) => (
+            <li key={link.id} className="comment-entry">
+              <div className="history-entry-header">
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="task-link"
+                >
+                  {link.title || link.url}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => deleteLink(link)}
+                  disabled={
+                    busy ||
+                    (link.createdBy &&
+                      link.createdBy.id !== userId &&
+                      !canManage)
+                  }
+                  className="record-action record-action-danger"
+                >
+                  Delete
+                </button>
+              </div>
+              {link.title ? (
+                <p className="section-description">{link.url}</p>
+              ) : null}
+              <p className="section-description">
+                by {link.createdBy?.name || link.createdBy?.email} ·{" "}
+                {formatTimestamp(link.createdAt)}
+              </p>
+            </li>
+          ))}
+        </ol>
+        {links.length === 0 ? (
+          <p className="section-description">
+            No links yet. Share a repository or reference so collaborators can
+            start working.
+          </p>
+        ) : null}
+        <form onSubmit={addLink} className="form-stack dialog-form">
+          <label className="form-field">
+            <span className="field-label">Add a link</span>
+            <input
+              type="url"
+              value={linkUrl}
+              onChange={(event) => {
+                setLinkUrl(event.target.value);
+                setLinkError("");
+              }}
+              maxLength={2048}
+              className="form-control"
+              placeholder="https://github.com/your-team/your-repo"
+              aria-invalid={Boolean(linkError)}
+            />
+            {linkError ? (
+              <span className="field-error">{linkError}</span>
+            ) : null}
+          </label>
+          <label className="form-field">
+            <span className="field-label">Label (optional)</span>
+            <input
+              type="text"
+              value={linkTitle}
+              onChange={(event) => setLinkTitle(event.target.value)}
+              maxLength={120}
+              className="form-control"
+              placeholder="Repository, design doc, spec..."
+            />
+          </label>
+          <div className="form-actions">
+            <button
+              type="submit"
+              disabled={busy || !linkUrl.trim()}
+              className="button-secondary"
+            >
+              Add link
             </button>
           </div>
         </form>

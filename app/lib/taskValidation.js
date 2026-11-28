@@ -1,4 +1,5 @@
 import { isValidProjectId } from "./projectValidation.js";
+import { validateTaskLinks } from "./taskLinkValidation.js";
 
 const validPriorities = new Set(["LOW", "MEDIUM", "HIGH"]);
 // Status is intentionally NOT part of generic task input. Lifecycle changes
@@ -11,6 +12,7 @@ const allowedFields = new Set([
   "dueDate",
   "projectId",
   "assigneeId",
+  "links",
 ]);
 
 export function isValidTaskId(id) {
@@ -118,6 +120,17 @@ export function validateTaskInput(input, { partial = false } = {}) {
     } else {
       data.assigneeId = input.assigneeId;
     }
+  }
+
+  if (Object.hasOwn(input, "links")) {
+    if (partial) {
+      return {
+        error: "Links are managed from the task details panel, not by editing.",
+      };
+    }
+    const links = validateTaskLinks(input.links);
+    if (links.error) return links;
+    data.links = links.data;
   }
 
   return { data };

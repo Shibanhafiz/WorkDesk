@@ -43,6 +43,7 @@ export default function TaskForm({
     const dueDate = String(formData.get("dueDate") ?? "");
     const priority = formData.get("priority");
     const projectId = String(formData.get("projectId") ?? "");
+    const link = String(formData.get("link") ?? "").trim();
     const validationErrors = {};
 
     if (!title) {
@@ -62,6 +63,12 @@ export default function TaskForm({
     if (!priorities.includes(priority)) {
       validationErrors.priority = "Choose a valid priority.";
     }
+    if (link && !/^https?:\/\/\S+$/i.test(link)) {
+      validationErrors.link = "Enter a link starting with http:// or https://.";
+    }
+    if (link.length > 2048) {
+      validationErrors.link = "Link must be 2,048 characters or fewer.";
+    }
 
     setFieldErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) {
@@ -78,6 +85,7 @@ export default function TaskForm({
         dueDate: dueDate || null,
         projectId: projectId || null,
         assigneeId: assigneeId || null,
+        ...(link ? { links: [link] } : {}),
       });
     } finally {
       isSubmitting.current = false;
@@ -255,6 +263,34 @@ export default function TaskForm({
             </span>
           ) : null}
         </label>
+
+        {!initialTask ? (
+          <label className="form-field">
+            <span className="field-label">Project link (optional)</span>
+            <input
+              name="link"
+              type="url"
+              maxLength={2048}
+              placeholder="https://github.com/your-team/your-repo"
+              aria-invalid={Boolean(fieldErrors.link)}
+              aria-describedby={fieldErrors.link ? "link-error" : undefined}
+              onChange={() =>
+                setFieldErrors((current) => ({ ...current, link: "" }))
+              }
+              className="form-control"
+            />
+            {fieldErrors.link ? (
+              <span id="link-error" className="field-error">
+                {fieldErrors.link}
+              </span>
+            ) : (
+              <span className="section-description">
+                Share the repository or any resource collaborators need to start
+                work. Manage links later from the task details.
+              </span>
+            )}
+          </label>
+        ) : null}
 
         <div className="form-actions">
           <button

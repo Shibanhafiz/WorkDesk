@@ -110,3 +110,30 @@ test("accepts valid assignee IDs and explicit unassignment", () => {
   );
   assert.ok(validateTaskInput({ title: "Task", assigneeId: "unknown" }).error);
 });
+
+test("accepts links on creation and rejects them on updates", () => {
+  const created = validateTaskInput({
+    title: "With links",
+    links: ["https://github.com/team/repo", " http://example.com/doc "],
+  });
+  assert.equal(created.error, undefined);
+  assert.deepEqual(created.data.links, [
+    "https://github.com/team/repo",
+    "http://example.com/doc",
+  ]);
+
+  assert.equal(
+    validateTaskInput({ title: "No links" }, { partial: true }).data.links,
+    undefined,
+  );
+  assert.ok(
+    validateTaskInput({ links: ["https://example.com"] }, { partial: true })
+      .error,
+  );
+  assert.ok(
+    validateTaskInput({ title: "Task", links: "https://example.com" }).error,
+  );
+  assert.ok(
+    validateTaskInput({ title: "Task", links: ["javascript:alert(1)"] }).error,
+  );
+});

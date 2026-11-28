@@ -82,6 +82,10 @@ function activityLabel(type, metadata) {
       return `Attachment added${metadata?.fileName ? `: ${metadata.fileName}` : ""}`;
     case "ATTACHMENT_DELETED":
       return "Attachment deleted";
+    case "LINK_ADDED":
+      return `Link added${metadata?.url ? `: ${metadata.url}` : ""}`;
+    case "LINK_REMOVED":
+      return "Link removed";
     default:
       return type.replaceAll("_", " ").toLowerCase();
   }
