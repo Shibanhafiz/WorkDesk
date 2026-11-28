@@ -59,9 +59,16 @@ export async function POST(_request, { params }) {
     let delivered = false;
     if (webhookUrl && invitation.email) {
       try {
+        if (process.env.NODE_ENV === "production" && !webhookUrl.startsWith("https://")) {
+          throw new Error("Webhook URL must use HTTPS in production");
+        }
+        const headers = { "Content-Type": "application/json" };
+        if (process.env.INVITATION_WEBHOOK_SECRET) {
+          headers.Authorization = `Bearer ${process.env.INVITATION_WEBHOOK_SECRET}`;
+        }
         const response = await fetch(webhookUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             email: invitation.email,
             token: invitation.token,
@@ -71,6 +78,9 @@ export async function POST(_request, { params }) {
           }),
         });
         delivered = response.ok;
+        if (!delivered) {
+          logApiError("Invitation", "resend delivery", new Error(`Webhook status ${response.status}`));
+        }
       } catch (error) {
         logApiError("Invitation", "resend delivery", error);
       }

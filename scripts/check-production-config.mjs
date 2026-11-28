@@ -17,8 +17,11 @@ if (
 if (process.env.ALLOW_DEV_RESET_TOKEN === "true") {
   problems.push("ALLOW_DEV_RESET_TOKEN must be false in production.");
 }
-if (process.env.TRUST_PROXY_HEADERS !== "false") {
-  problems.push("TRUST_PROXY_HEADERS requires a verified reverse-proxy contract.");
+if (!["true", "false"].includes(process.env.TRUST_PROXY_HEADERS ?? "false")) {
+  problems.push("TRUST_PROXY_HEADERS must be \"true\" or \"false\".");
+}
+if (process.env.TRUST_PROXY_HEADERS === "true") {
+  console.error("WARNING: TRUST_PROXY_HEADERS=true requires a reverse proxy that overwrites X-Forwarded-For/X-Real-IP.");
 }
 if (process.env.RATE_LIMIT_SHARED_STORE_CONFIGURED !== "true") {
   problems.push("A shared atomic rate-limit store must be configured for production.");

@@ -24,8 +24,10 @@ or private keys.
 | `PASSWORD_RESET_WEBHOOK_URL` | HTTPS endpoint that receives `{ email, token }`. Required in production. |
 | `PASSWORD_RESET_WEBHOOK_SECRET` | Optional bearer secret sent to the reset webhook. |
 | `INVITATION_WEBHOOK_URL` | Optional HTTPS endpoint for invitation delivery. |
+| `INVITATION_WEBHOOK_SECRET` | Optional bearer secret sent to the invitation webhook. |
 | `ALLOW_DEV_RESET_TOKEN` | Local-only escape hatch; must be `false` in production. |
-| `TRUST_PROXY_HEADERS` | Set `true` only when a trusted reverse proxy overwrites `X-Forwarded-For`. |
+| `TRUST_PROXY_HEADERS` | Set `true` only when a trusted reverse proxy overwrites `X-Forwarded-For`/`X-Real-IP`. |
+| `RATE_LIMIT_SHARED_STORE_CONFIGURED` | Production config-check flag; set `true` only after wiring a shared atomic rate-limit store. |
 | `NEXT_PUBLIC_GOOGLE_*` | Kept disabled until an OAuth callback is implemented and tested. |
 
 Run `npm run config:check` before a production deployment. It fails when a

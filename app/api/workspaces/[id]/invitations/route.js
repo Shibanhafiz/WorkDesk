@@ -117,9 +117,16 @@ export async function POST(request, { params }) {
     let delivered = false;
     if (webhookUrl && email) {
       try {
+        if (process.env.NODE_ENV === "production" && !webhookUrl.startsWith("https://")) {
+          throw new Error("Webhook URL must use HTTPS in production");
+        }
+        const headers = { "Content-Type": "application/json" };
+        if (process.env.INVITATION_WEBHOOK_SECRET) {
+          headers.Authorization = `Bearer ${process.env.INVITATION_WEBHOOK_SECRET}`;
+        }
         const response = await fetch(webhookUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             email,
             token,
