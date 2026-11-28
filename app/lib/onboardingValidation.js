@@ -91,7 +91,7 @@ export function validateProfileInput(input) {
   }
 
   const avatarUrl = cleanString(input.avatarUrl, 500);
-  if (avatarUrl && !/^https?:\/\/\S+$/i.test(avatarUrl)) {
+  if (avatarUrl && !/^https:\/\/\S+$/i.test(avatarUrl)) {
     return { error: "Profile image must be a valid http(s) URL." };
   }
 

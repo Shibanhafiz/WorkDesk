@@ -28,6 +28,7 @@ const PreferencesContext = createContext(null);
 const listeners = new Set();
 let currentSnapshot = serverSnapshot;
 let hasLoadedStorage = false;
+let hydrated = false;
 
 function normalizePreferences(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -101,7 +102,6 @@ function handleStorageChange(event) {
 
 function subscribe(listener) {
   listeners.add(listener);
-  loadPreferencesFromStorage();
   window.addEventListener("storage", handleStorageChange);
 
   return () => {
@@ -111,7 +111,7 @@ function subscribe(listener) {
 }
 
 function getSnapshot() {
-  return currentSnapshot;
+  return hydrated ? currentSnapshot : serverSnapshot;
 }
 
 function getServerSnapshot() {
@@ -150,12 +150,16 @@ export function PreferencesProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!snapshot.isReady) {
-      return;
-    }
+    hydrated = true;
+    loadPreferencesFromStorage();
+    publishSnapshot(currentSnapshot);
+  }, []);
 
-    document.documentElement.dataset.theme = snapshot.preferences.theme;
-    document.documentElement.dataset.layout = snapshot.preferences.layout;
+  useEffect(() => {
+    if (snapshot.isReady) {
+      document.documentElement.dataset.theme = snapshot.preferences.theme;
+      document.documentElement.dataset.layout = snapshot.preferences.layout;
+    }
   }, [snapshot]);
 
   return (
