@@ -21,6 +21,12 @@ export function proxy(request) {
     pathname.startsWith("/api/") &&
     ["POST", "PATCH", "PUT", "DELETE"].includes(request.method)
   ) {
+    const fetchSite = request.headers.get("sec-fetch-site");
+    if (fetchSite === "cross-site") {
+      return applyHeaders(
+        NextResponse.json({ error: "Invalid origin." }, { status: 403 }),
+      );
+    }
     const origin = request.headers.get("origin");
     if (origin) {
       let originHost;
