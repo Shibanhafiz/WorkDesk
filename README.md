@@ -73,6 +73,9 @@ The application uses Next.js and React for the frontend, API route handlers for 
 - Assign tasks to projects or leave them unassigned.
 - Set optional due dates.
 - View individual task details.
+- Attach links (GitHub repository, spec, design doc, or any http/https URL) at
+  creation or from the task details panel; upload files as attachments.
+  Only the link creator or a workspace manager can remove a link.
 
 ### Upcoming Tasks
 Tasks are organized into four categories:
@@ -249,9 +252,12 @@ Default status is `TODO`, and default priority is `MEDIUM`.
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/tasks` | Retrieve tasks |
-| POST | `/api/tasks` | Create a task |
+| POST | `/api/tasks` | Create a task (optional `links` array of http/https URLs) |
 | PATCH | `/api/tasks/[id]` | Update a task |
 | DELETE | `/api/tasks/[id]` | Delete a task |
+| GET | `/api/tasks/[id]/links` | List task links |
+| POST | `/api/tasks/[id]/links` | Add a task link |
+| DELETE | `/api/tasks/[id]/links/[linkId]` | Remove a task link |
 
 ### Project Endpoints
 
@@ -263,6 +269,9 @@ Default status is `TODO`, and default priority is `MEDIUM`.
 | PATCH | `/api/projects/[id]` | Update a project |
 
 Incoming data is validated by backend API routes before database operations.
+Task and project listings are paginated (`page`, `pageSize`, max 100) and return
+`X-Total-Count` / `X-Has-More` headers while keeping array responses. Tasks can
+also be filtered by `status`, `projectId`, `assigneeId` and `mine=true`.
 
 ## Project Structure
 
@@ -323,7 +332,8 @@ cd WorkDesk
 ### 3. Install Dependencies
 
 ```bash
-npm install
+npm ci
+npx prisma generate
 ```
 
 ### 4. Initialize the Database
@@ -380,10 +390,17 @@ npm test
 npm run lint
 ```
 
-### Production Build
+### HTTP Integration Checks
 
 ```bash
 npm run build
+npm run test:http
+```
+
+### Production Configuration Check
+
+```bash
+npm run config:check
 ```
 
 ## Deployment Considerations

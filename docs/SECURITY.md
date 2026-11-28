@@ -2,44 +2,46 @@
 
 ## Implemented controls
 
-- Passwords are hashed with `scrypt` and a random salt (`app/lib/password.js`);
-  plaintext passwords are never stored or logged.
-- Sessions are opaque 32-byte tokens stored in the database, sent in an
-  HttpOnly, SameSite=Lax cookie; `Secure` is enabled when `NODE_ENV=production`.
-  "Remember me" selects a 7-day persistent cookie, otherwise a browser-session
-  cookie with a 12-hour server expiry. Logout deletes the session row.
-- Password reset tokens are 256-bit random values, stored only as SHA-256
-  hashes, expire after one hour, are single-use, and invalidate existing
-  sessions on success. In production a webhook must be configured for delivery;
-  without it, the recovery token is only shown in development mode.
-- Invitation tokens are 256-bit random, single-use, expire after seven days,
-  and are checked against the authenticated email on acceptance. Duplicate
-  active invitations for the same email/workspace are rejected.
-- All workspace data APIs check membership on the server. Project creation
-  requires MANAGER/ADMIN; task creation resolves workspace through the
-  authenticated session or the selected project and rejects cross-workspace
-  project/assignee IDs. Member management is Admin-only; task assignment to a
-  third party requires Manager/Admin and an assignable specialization.
-- Request bodies are allow-listed by validation helpers, preventing mass
-  assignment of `workspaceId`, `role`, `status`, `userId` and similar fields.
-- `proxy.js` sets `X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`
-  and `Permissions-Policy`, and rejects cross-origin POST/PATCH/PUT/DELETE
-  requests that carry a mismatching `Origin` header.
-- In-memory per-IP rate limits protect login, registration, password reset and
-  invitation acceptance. Error responses are generic; logs contain error names
-  and codes only, never tokens or credentials.
-- No OAuth provider is enabled. Google UI is hidden unless explicit
-  configuration flags and a tested callback flow exist.
+- Passwords use scrypt with a random salt and constant-time comparison
+  (`app/lib/password.js`). Login runs the same scrypt path for unknown emails
+  using a dummy hash; errors are generic. Passwords are limited to 8–200
+  characters.
+- Sessions use 256-bit opaque tokens; only SHA-256 hashes are stored in the
+  database (`app/lib/session.js`, `app/lib/sessionToken.js`). Cookies are
+  HttpOnly, SameSite=Lax and Secure in production. Logout and password reset
+  delete session rows.
+- Password reset tokens are 256-bit, stored only as SHA-256 hashes, expire
+  after one hour, are single-use via an atomic claim, invalidate prior unused
+  tokens on a new request and invalidate all sessions on success. Production
+  requires an HTTPS webhook and fails loudly when delivery is unavailable.
+- Invitation tokens are 256-bit, expire after seven days, are single-use and
+  are checked against the authenticated email when an email is set. Declined
+  invitations cannot be resent. Acceptance is transactional.
+- Every sensitive route resolves the caller from the session cookie and
+  re-checks membership/role in the database. URL IDs, body IDs and roles are
+  never trusted as authorization inputs. Task sub-resources are scoped by both
+  entity id and task id.
+- Request bodies are type-checked and allow-listed. Optional notification
+  creation is guarded and cannot fail the primary write. Multi-step workflows
+  are transactional with P2002/P2025 handling.
+- Lifecycle transitions use conditional updates inside a transaction; a
+  concurrent transition receives 409 and history/notifications remain consistent.
+- Rate limiting covers login, registration, reset and invitation acceptance.
+  Forwarded IP headers are ignored unless a trusted proxy is explicitly
+  configured, and per-account keys are used where applicable.
+- `proxy.js` sets security headers and rejects mismatching `Origin` headers on
+  cross-origin writes. `npm run config:check` validates production prerequisites.
 
 ## Remaining risks / manual setup
 
-- The rate limiter is process-local. Multi-instance deployments need a shared
-  store (for example Redis) before relying on it as a primary control.
-- A Content Security Policy is intentionally not set; adding one requires
-  validating Next.js inline scripts and can break the app if misconfigured.
-- The local database is SQLite. A managed PostgreSQL database and a verified
-  data migration are required before internet-facing multi-user deployment.
-- Email delivery, email verification and OAuth require provider configuration;
-  none are claimed as active.
-- No browser automation suite is included; visual/responsive checks were done
-  by inspection, not by automated browser tests.
+- The rate limiter is process-local. A shared atomic store is required before
+  public multi-instance deployment; local defaults do not trust client headers.
+- SQLite is local-only. A managed PostgreSQL database and verified data
+  migration are required before internet-facing multi-user deployment.
+- `User.specialization` remains a global profile attribute. Workspace-scoped
+  specialization would require a schema change and a controlled migration.
+- Invitation and reset webhooks receive raw tokens; only first-party HTTPS
+  endpoints with the optional shared secret should be configured.
+- No email verification or OAuth provider is active. Content Security Policy is
+  intentionally unset pending validation of framework inline scripts.
+- No browser automation or Lighthouse audit is included.

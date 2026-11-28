@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test",
+    "test:http": "node scripts/http-integration.mjs",
+    "config:check": "node scripts/check-production-config.mjs",
     "predev": "prisma generate",
     "prebuild": "prisma generate",
     "db:generate": "prisma generate",
