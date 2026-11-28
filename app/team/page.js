@@ -58,12 +58,12 @@ function AddMemberDialog({ workspaceId, onClose, onAdded }) {
           <p className="dialog-description">
             {result.email} was added as {ROLE_LABELS[result.role]}.
           </p>
-          {result.temporaryPassword ? (
+          {result.resetToken ? (
             <div className="feedback">
               <p className="section-description">
-                New account created. Temporary password (share securely):
+                New account created. Share this one-time password reset link securely:
               </p>
-              <p className="details-copy">{result.temporaryPassword}</p>
+              <p className="details-copy">{`${window.location.origin}/reset-password?token=${result.resetToken}`}</p>
             </div>
           ) : null}
         </div>

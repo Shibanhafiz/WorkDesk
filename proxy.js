@@ -7,11 +7,26 @@ const SECURITY_HEADERS = {
   "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
 };
 
-function applyHeaders(response) {
+const SESSION_COOKIE = "workdesk_session";
+const CSRF_COOKIE = "workdesk_csrf";
+const CSRF_HEADER = "x-csrf-token";
+
+function ensureCsrfCookie(request, response) {
+  if (request.cookies.get(CSRF_COOKIE)?.value) return response;
+  response.cookies.set(CSRF_COOKIE, crypto.randomUUID(), {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
+  return response;
+}
+
+function applyHeaders(request, response) {
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     response.headers.set(name, value);
   }
-  return response;
+  return ensureCsrfCookie(request, response);
 }
 
 export function proxy(request) {
@@ -24,6 +39,7 @@ export function proxy(request) {
     const fetchSite = request.headers.get("sec-fetch-site");
     if (fetchSite === "cross-site") {
       return applyHeaders(
+        request,
         NextResponse.json({ error: "Invalid origin." }, { status: 403 }),
       );
     }
@@ -34,18 +50,31 @@ export function proxy(request) {
         originHost = new URL(origin).host;
       } catch {
         return applyHeaders(
+          request,
           NextResponse.json({ error: "Invalid origin." }, { status: 403 }),
         );
       }
       if (originHost !== request.nextUrl.host) {
         return applyHeaders(
+          request,
           NextResponse.json({ error: "Invalid origin." }, { status: 403 }),
+        );
+      }
+    }
+    const sessionCookie = request.cookies.get(SESSION_COOKIE)?.value;
+    if (sessionCookie) {
+      const csrfCookie = request.cookies.get(CSRF_COOKIE)?.value;
+      const csrfHeader = request.headers.get(CSRF_HEADER);
+      if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+        return applyHeaders(
+          request,
+          NextResponse.json({ error: "Invalid CSRF token." }, { status: 403 }),
         );
       }
     }
   }
 
-  return applyHeaders(NextResponse.next());
+  return applyHeaders(request, NextResponse.next());
 }
 
 export const config = {

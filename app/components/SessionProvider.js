@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { installCsrfFetch } from "../lib/csrf";
 
 const SessionContext = createContext(null);
 
@@ -26,6 +27,7 @@ export function SessionProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    installCsrfFetch();
     let active = true;
     fetch("/api/auth/me", { cache: "no-store" })
       .then((response) => response.json())

@@ -6,6 +6,11 @@ import { randomBytes } from "node:crypto";
 import { SPECIALIZATIONS } from "@/app/lib/workspacePermissions";
 import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
 import { isJsonObjectBody } from "@/app/lib/requestBody";
+import {
+  createPasswordResetToken,
+  hashPasswordResetToken,
+  PASSWORD_RESET_TTL_SECONDS,
+} from "@/app/lib/passwordReset";
 
 const VALID_ROLES = ["ADMIN", "MANAGER", "MEMBER"];
 const VALID_SPECIALIZATIONS = new Set([
@@ -47,19 +52,36 @@ export async function POST(request, { params }) {
     return errorResponse("Invalid specialization.", 400);
   }
 
-  let temporaryPassword = null;
+  let resetToken = null;
   try {
     const result = await prisma.$transaction(async (tx) => {
       let user = await tx.user.findUnique({ where: { email } });
+      let createdNewUser = false;
       if (!user) {
-        temporaryPassword = randomBytes(9).toString("base64url").slice(0, 12) + "Aa1!";
+        const generatedPassword = randomBytes(24).toString("base64url");
         user = await tx.user.create({
           data: {
             email,
             name: email.split("@")[0],
-            passwordHash: await hashPassword(temporaryPassword),
+            passwordHash: await hashPassword(generatedPassword),
             role: "MEMBER",
             specialization,
+          },
+        });
+        createdNewUser = true;
+      }
+
+      if (createdNewUser) {
+        resetToken = createPasswordResetToken();
+        await tx.passwordResetToken.updateMany({
+          where: { userId: user.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        await tx.passwordResetToken.create({
+          data: {
+            tokenHash: hashPasswordResetToken(resetToken),
+            userId: user.id,
+            expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_SECONDS * 1000),
           },
         });
       }
@@ -105,7 +127,7 @@ export async function POST(request, { params }) {
         email: result.user.email,
         role,
         specialization,
-        temporaryPassword,
+        resetToken,
       },
       { status: 201 },
     );
