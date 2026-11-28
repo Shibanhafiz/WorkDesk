@@ -254,9 +254,10 @@ try {
   const registerC = await request("POST", "/api/auth/register", {
     body: { name: "User C", email: emailC, password: "Testpass123!" },
   });
+  const jarC = cookiesFrom(registerC);
   const accept = await request("POST", "/api/invitations/accept", {
     body: { token: invite.json?.token },
-    cookie: cookieFrom(registerC),
+    jar: jarC,
   });
   check("invitation acceptance succeeds", accept.status === 200, JSON.stringify(accept.json));
 
