@@ -1,6 +1,7 @@
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { requireTaskMember } from "@/app/lib/session";
+import { isValidTaskId } from "@/app/lib/taskValidation";
 import {
   validateLifecycleAction,
   LIFECYCLE_ACTIONS,
@@ -14,6 +15,9 @@ import {
 } from "@/app/lib/notifications";
 import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
 import { can } from "@/app/lib/workspacePermissions";
+import { isJsonObjectBody } from "@/app/lib/requestBody";
+
+class ConcurrentTransitionError extends Error {}
 
 function isRecordNotFound(error) {
   return error && typeof error === "object" && error.code === "P2025";
@@ -21,6 +25,8 @@ function isRecordNotFound(error) {
 
 export async function POST(request, { params }) {
   const { id } = await params;
+  if (!isValidTaskId(id)) return errorResponse("Task ID must be a valid CUID.", 400);
+
   const access = await requireTaskMember(prisma, id, "MEMBER");
   if (access.error) return errorResponse(access.error, access.status);
 
@@ -29,6 +35,9 @@ export async function POST(request, { params }) {
     body = await request.json();
   } catch {
     return errorResponse("Request body must be valid JSON.", 400);
+  }
+  if (!isJsonObjectBody(body)) {
+    return errorResponse("Request body must be a JSON object.", 400);
   }
 
   const { action, reason, reviewComment } = body;
@@ -51,13 +60,18 @@ export async function POST(request, { params }) {
 
   try {
     const isReopen = decision.to === "REOPENED";
-    const [updatedTask] = await prisma.$transaction([
-      prisma.task.update({
-        where: { id },
+    const [updatedTask, history] = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.task.updateMany({
+        where: { id, status: decision.from },
         data: {
           status: decision.to,
           ...(isReopen ? { reopenCount: { increment: 1 } } : {}),
         },
+      });
+      if (claimed.count !== 1) throw new ConcurrentTransitionError();
+
+      const fresh = await tx.task.findUnique({
+        where: { id },
         include: {
           project: { select: { id: true, name: true, status: true } },
           assignee: {
@@ -68,8 +82,8 @@ export async function POST(request, { params }) {
             include: { actor: { select: { id: true, name: true, email: true } } },
           },
         },
-      }),
-      prisma.taskHistory.create({
+      });
+      const transition = await tx.taskHistory.create({
         data: {
           taskId: id,
           fromStatus: decision.from,
@@ -78,10 +92,11 @@ export async function POST(request, { params }) {
           reason: decision.reason,
           reviewComment: decision.reviewComment,
         },
-      }),
-    ]);
+      });
+      return [fresh, transition];
+    });
 
-    const occurrence = `${task.reopenCount}`;
+    const occurrence = history.id;
     const taskTitle = task.title;
     const workspaceId = access.workspaceId;
 
@@ -140,6 +155,9 @@ export async function POST(request, { params }) {
 
     return Response.json(updatedTask);
   } catch (error) {
+    if (error instanceof ConcurrentTransitionError) {
+      return errorResponse("The task changed while processing. Reload and try again.", 409);
+    }
     if (isRecordNotFound(error)) return errorResponse("Task not found.", 404);
     logApiError("Task transition", action, error);
     return errorResponse("Unable to update task status. Please try again.", 500);

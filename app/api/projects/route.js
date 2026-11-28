@@ -3,6 +3,9 @@ import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { validateProjectInput } from "@/app/lib/projectValidation";
 import { getSessionUser, requireWorkspaceMember } from "@/app/lib/session";
 import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
+import { paginationHeaders, parsePagination } from "@/app/lib/pagination";
+
+const PROJECT_STATUSES = new Set(["PLANNING", "ACTIVE", "COMPLETED", "ARCHIVED"]);
 
 export async function GET(request) {
   const user = await getSessionUser(prisma);
@@ -10,6 +13,7 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const workspaceId = searchParams.get("workspaceId");
+  const { page, pageSize, skip, take } = parsePagination(searchParams);
 
   let where = {};
   if (workspaceId) {
@@ -26,13 +30,23 @@ export async function GET(request) {
     where = { workspaceId: { in: memberships.map((m) => m.workspaceId) } };
   }
 
+  const status = searchParams.get("status");
+  if (status && PROJECT_STATUSES.has(status)) where.status = status;
+
   try {
-    const projects = await prisma.project.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
-      include: { _count: { select: { tasks: true } } },
+    const [projects, total] = await Promise.all([
+      prisma.project.findMany({
+        where,
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        skip,
+        take,
+        include: { _count: { select: { tasks: true } } },
+      }),
+      prisma.project.count({ where }),
+    ]);
+    return Response.json(projects, {
+      headers: paginationHeaders(page, pageSize, total),
     });
-    return Response.json(projects);
   } catch (error) {
     logApiError("Project", "load", error);
     return errorResponse("Unable to load projects. Please try again.", 500);

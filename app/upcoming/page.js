@@ -41,6 +41,7 @@ export default function UpcomingPage() {
   const { currentWorkspace } = useWorkspaces();
   const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks(
     currentWorkspace?.id ?? null,
+    { pageSize: 100 },
   );
   const groups = groupTasksByDueDate(tasks, todayDateKey);
 

@@ -3,12 +3,8 @@ import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { hashPassword, validateRegistrationInput } from "@/app/lib/password";
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from "@/app/lib/session";
-import { checkRateLimit, getClientKey } from "@/app/lib/rateLimit";
+import { checkRateLimit, envRateLimit, getClientKey } from "@/app/lib/rateLimit";
 
-/**
- * POST /api/auth/register
- * Creates a user, a personal workspace with an ADMIN membership, and a session.
- */
 export async function POST(request) {
   let body;
   try {
@@ -22,7 +18,7 @@ export async function POST(request) {
 
   const { name, email, password } = validation.data;
   const rate = checkRateLimit(`register:${getClientKey(request)}`, {
-    limit: 3,
+    limit: envRateLimit("RATE_LIMIT_REGISTER_PER_HOUR", 10),
     windowMs: 60 * 60 * 1000,
   });
   if (!rate.allowed) {
@@ -35,52 +31,60 @@ export async function POST(request) {
   try {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      return errorResponse("An account with that email already exists.", 409);
+      return errorResponse("Unable to create account. Please try again.", 400);
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: { name, email, passwordHash, role: "MEMBER", specialization: "OTHER" },
+    const result = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: { name, email, passwordHash, role: "MEMBER", specialization: "OTHER" },
+      });
+      const workspace = await tx.workspace.create({
+        data: {
+          name: `${name}'s workspace`,
+          description: "Personal workspace",
+          isPersonal: true,
+          ownerId: created.id,
+        },
+      });
+      await tx.workspaceMember.create({
+        data: { userId: created.id, workspaceId: workspace.id, role: "ADMIN" },
+      });
+      await tx.user.update({
+        where: { id: created.id },
+        data: { workspaceId: workspace.id },
+      });
+      const session = await createSession(tx, created.id, {
+        remember: true,
+        workspaceId: workspace.id,
+      });
+      return { user: created, workspace, token: session.token };
     });
 
-    // Bootstrap a personal workspace so the UI has a working workspace.
-    const workspace = await prisma.workspace.create({
-      data: {
-        name: `${name}'s workspace`,
-        description: "Personal workspace",
-        isPersonal: true,
-        ownerId: user.id,
-      },
-    });
-    await prisma.workspaceMember.create({
-      data: { userId: user.id, workspaceId: workspace.id, role: "ADMIN" },
-    });
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { workspaceId: workspace.id },
-    });
-
-    const { token } = await createSession(prisma, user.id, {
-      remember: true,
-      workspaceId: workspace.id,
-    });
     const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE, token, sessionCookieOptions({ remember: true }));
+    cookieStore.set(
+      SESSION_COOKIE,
+      result.token,
+      sessionCookieOptions({ remember: true }),
+    );
 
     return Response.json(
       {
         user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email,
           role: "ADMIN",
-          specialization: user.specialization,
+          specialization: result.user.specialization,
         },
-        workspaceId: workspace.id,
+        workspaceId: result.workspace.id,
       },
       { status: 201 },
     );
   } catch (error) {
+    if (error && typeof error === "object" && error.code === "P2002") {
+      return errorResponse("Unable to create account. Please try again.", 400);
+    }
     logApiError("Auth", "register", error);
     return errorResponse("Unable to create account. Please try again.", 500);
   }

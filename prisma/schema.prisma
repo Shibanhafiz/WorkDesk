@@ -153,13 +153,16 @@ model User {
   // Attachments uploaded by this user
   attachments    Attachment[]
 
+  // Links added by this user
+  createdLinks   TaskLink[] @relation("TaskLinksCreated")
+
   // Active login sessions
   sessions       Session[]
 }
 
 model Session {
   id          String   @id @default(uuid())
-  token       String   @unique
+  tokenHash   String   @unique @map("token")
   userId      String
   workspaceId String?
   expiresAt   DateTime
@@ -201,6 +204,8 @@ model Project {
 
   // Tasks in this project
   tasks       Task[]
+
+  @@index([workspaceId, status])
 }
 
 model Task {
@@ -243,6 +248,11 @@ model Task {
   // Collaboration records
   issues      Issue[]
   attachments Attachment[]
+  links       TaskLink[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, assigneeId])
+  @@index([workspaceId, projectId])
 }
 
 model TaskHistory {
@@ -325,6 +335,20 @@ model Attachment {
 
   task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   uploader User @relation(fields: [uploaderId], references: [id])
+
+  @@index([taskId, createdAt])
+}
+
+model TaskLink {
+  id          String   @id @default(cuid())
+  taskId      String
+  url         String
+  title       String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  task      Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("TaskLinksCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([taskId, createdAt])
 }

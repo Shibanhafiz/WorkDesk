@@ -1,3 +1,5 @@
+import { addDays, DUE_SOON_DAYS } from "./dueDateWindow.js";
+
 const activeStatuses = new Set(["PLANNING", "ACTIVE"]);
 
 function getDateKey(value) {
@@ -51,11 +53,7 @@ export function calculateProjectTaskMetrics(tasks) {
 }
 
 export function calculateProjectMetrics(projects, today) {
-  const dueSoonThrough = today ? new Date(`${today}T00:00:00.000Z`) : null;
-  dueSoonThrough?.setUTCDate(dueSoonThrough.getUTCDate() + 7);
-  const dueSoonDateKey = dueSoonThrough
-    ? dueSoonThrough.toISOString().slice(0, 10)
-    : null;
+  const dueSoonDateKey = today ? addDays(today, DUE_SOON_DAYS) : null;
   const approachingProjects = today
     ? sortByDueDate(
         projects.filter((project) => {

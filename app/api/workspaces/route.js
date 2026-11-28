@@ -1,6 +1,7 @@
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { getSessionUser } from "@/app/lib/session";
+import { isJsonObjectBody } from "@/app/lib/requestBody";
 
 export async function GET() {
   const user = await getSessionUser(prisma);
@@ -32,6 +33,10 @@ export async function POST(request) {
     body = await request.json();
   } catch {
     return errorResponse("Request body must be valid JSON.", 400);
+  }
+
+  if (!isJsonObjectBody(body)) {
+    return errorResponse("Request body must be a JSON object.", 400);
   }
 
   const { name, description } = body;

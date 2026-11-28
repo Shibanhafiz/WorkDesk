@@ -1,0 +1,2 @@
+ALTER TABLE "Task" ADD COLUMN "assigneeId" TEXT;
+ALTER TABLE "Task" ADD COLUMN "workspaceId" TEXT;

@@ -1,6 +1,6 @@
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logTaskApiError } from "@/app/lib/taskApiResponse";
-import { validateTaskInput } from "@/app/lib/taskValidation";
+import { isValidTaskId, validateTaskInput } from "@/app/lib/taskValidation";
 import { requireWorkspaceMember } from "@/app/lib/session";
 import { authorizeAssignment, canEditTask } from "@/app/lib/taskAssignment";
 import {
@@ -8,6 +8,7 @@ import {
   taskAssignmentNotification,
 } from "@/app/lib/notifications";
 import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
+import { isJsonObjectBody } from "@/app/lib/requestBody";
 
 function isRecordNotFound(error) {
   return error && typeof error === "object" && error.code === "P2025";
@@ -29,6 +30,7 @@ const taskInclude = {
 
 export async function PATCH(request, { params }) {
   const { id } = await params;
+  if (!isValidTaskId(id)) return errorResponse("Task ID must be a valid CUID.", 400);
 
   let body;
   try {
@@ -37,6 +39,9 @@ export async function PATCH(request, { params }) {
     return errorResponse("Request body must be valid JSON.", 400);
   }
 
+  if (!isJsonObjectBody(body)) {
+    return errorResponse("Request body must be a JSON object.", 400);
+  }
   if (Object.hasOwn(body, "status")) {
     return errorResponse(
       "Status cannot be edited directly. Use a lifecycle action instead.",
@@ -131,6 +136,7 @@ export async function PATCH(request, { params }) {
 
 export async function DELETE(_request, { params }) {
   const { id } = await params;
+  if (!isValidTaskId(id)) return errorResponse("Task ID must be a valid CUID.", 400);
 
   const task = await prisma.task.findUnique({ where: { id } });
   if (!task) return errorResponse("Task not found.", 404);

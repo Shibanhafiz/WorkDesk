@@ -5,6 +5,7 @@ import {
   SESSION_TTL_SECONDS,
   SHORT_SESSION_TTL_SECONDS,
   createSessionToken,
+  hashSessionToken,
   sessionCookieOptions,
 } from "./sessionToken.js";
 
@@ -13,15 +14,17 @@ export {
   SESSION_TTL_SECONDS,
   SHORT_SESSION_TTL_SECONDS,
   createSessionToken,
+  hashSessionToken,
   sessionCookieOptions,
 };
 
 export async function createSession(prisma, userId, { remember = false, workspaceId = null } = {}) {
   const token = createSessionToken();
+  const tokenHash = hashSessionToken(token);
   const ttlSeconds = remember ? SESSION_TTL_SECONDS : SHORT_SESSION_TTL_SECONDS;
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
   await prisma.session.create({
-    data: { token, userId, workspaceId, expiresAt },
+    data: { tokenHash, userId, workspaceId, expiresAt },
   });
   return { token, expiresAt };
 }
@@ -37,7 +40,7 @@ export async function getSessionUser(prisma) {
 
   try {
     const session = await prisma.session.findUnique({
-      where: { token },
+      where: { tokenHash: hashSessionToken(token) },
       include: { user: true },
     });
     if (!session) return null;
@@ -145,7 +148,7 @@ export async function destroySession(prisma) {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (token) {
-    await prisma.session.deleteMany({ where: { token } }).catch(() => {});
+    await prisma.session.deleteMany({ where: { tokenHash: hashSessionToken(token) } }).catch(() => {});
   }
   return token;
 }

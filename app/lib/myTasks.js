@@ -1,7 +1,6 @@
-// Shared selection and filtering rules for the My Tasks page.
-// Kept out of the component so the behaviour can be unit tested.
+import { addDays, DUE_SOON_DAYS } from "./dueDateWindow.js";
 
-export const UPCOMING_WINDOW_DAYS = 7;
+export const UPCOMING_WINDOW_DAYS = DUE_SOON_DAYS;
 
 export function isOverdue(task, todayDateKey) {
   return (
@@ -15,14 +14,8 @@ export function isUpcoming(task, todayDateKey, windowDays = UPCOMING_WINDOW_DAYS
   if (!todayDateKey || !task.dueDate || task.status === "DONE") return false;
   const due = String(task.dueDate).slice(0, 10);
   if (due < todayDateKey) return false;
-  const horizon = addDays(todayDateKey, windowDays - 1);
+  const horizon = addDays(todayDateKey, windowDays);
   return due <= horizon;
-}
-
-function addDays(dateKey, days) {
-  const date = new Date(`${dateKey}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
 }
 
 /** Only tasks assigned to the signed-in user. */

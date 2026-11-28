@@ -69,6 +69,7 @@ export default function AnalyticsPage() {
   const { currentWorkspace } = useWorkspaces();
   const { tasks, todayDateKey, isLoading, error, reloadTasks } = useTasks(
     currentWorkspace?.id ?? null,
+    { pageSize: 100 },
   );
   const metrics = calculateTaskMetrics(tasks, todayDateKey);
   const stats = [

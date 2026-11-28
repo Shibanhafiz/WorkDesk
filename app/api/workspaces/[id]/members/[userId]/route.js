@@ -11,6 +11,8 @@ const VALID_SPECIALIZATIONS = new Set([
   SPECIALIZATIONS.OTHER,
 ]);
 
+class MemberRuleError extends Error {}
+
 /**
  * PATCH /api/workspaces/[id]/members/[userId]
  * ADMIN only: change a member's workspace role and/or user specialization.
@@ -26,6 +28,9 @@ export async function PATCH(request, { params }) {
   } catch {
     return errorResponse("Request body must be valid JSON.", 400);
   }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return errorResponse("Request body must be a JSON object.", 400);
+  }
 
   const { role, specialization } = body;
   if (role !== undefined && !VALID_ROLES.includes(role)) {
@@ -37,43 +42,59 @@ export async function PATCH(request, { params }) {
   ) {
     return errorResponse("Invalid specialization.", 400);
   }
+  if (role === undefined && specialization === undefined) {
+    return errorResponse("No member changes were provided.", 400);
+  }
 
   try {
-    const membership = await prisma.workspaceMember.findFirst({
-      where: { userId: targetUserId, workspaceId: id },
-      include: { user: true },
-    });
-    if (!membership) return errorResponse("Member not found.", 404);
+    const updated = await prisma.$transaction(async (tx) => {
+      const membership = await tx.workspaceMember.findFirst({
+        where: { userId: targetUserId, workspaceId: id },
+        include: { user: true },
+      });
+      if (!membership) throw new MemberRuleError("Member not found.");
 
-    if (role !== undefined) {
-      await prisma.workspaceMember.update({
-        where: { id: membership.id },
-        data: { role },
-      });
-    }
-    if (specialization !== undefined) {
-      await prisma.user.update({
-        where: { id: targetUserId },
-        data: { specialization },
-      });
-    }
-    if (role !== undefined && role !== membership.role) {
-      await recordActivity(prisma, {
-        workspaceId: id,
-        actorId: access.userId,
-        type: ACTIVITY_TYPES.MEMBER_ROLE_CHANGED,
-        targetId: targetUserId,
-        targetType: "MEMBER",
-        metadata: { from: membership.role, to: role },
-      });
-    }
+      if (role !== undefined && role !== membership.role) {
+        if (targetUserId === access.userId) {
+          throw new MemberRuleError("You cannot change your own role.");
+        }
+        if (membership.role === "ADMIN" && role !== "ADMIN") {
+          const adminCount = await tx.workspaceMember.count({
+            where: { workspaceId: id, role: "ADMIN" },
+          });
+          if (adminCount <= 1) {
+            throw new MemberRuleError("Cannot demote the last admin.");
+          }
+        }
+        await tx.workspaceMember.update({
+          where: { id: membership.id },
+          data: { role },
+        });
+        await recordActivity(tx, {
+          workspaceId: id,
+          actorId: access.userId,
+          type: ACTIVITY_TYPES.MEMBER_ROLE_CHANGED,
+          targetId: targetUserId,
+          targetType: "MEMBER",
+          metadata: { from: membership.role, to: role },
+        });
+      }
 
-    const updated = await prisma.workspaceMember.findFirst({
-      where: { userId: targetUserId, workspaceId: id },
-      include: {
-        user: { select: { id: true, name: true, email: true, specialization: true } },
-      },
+      if (specialization !== undefined) {
+        await tx.user.update({
+          where: { id: targetUserId },
+          data: { specialization },
+        });
+      }
+
+      return tx.workspaceMember.findFirst({
+        where: { userId: targetUserId, workspaceId: id },
+        include: {
+          user: { select: { id: true, name: true, email: true, specialization: true } },
+        },
+      });
     });
+
     return Response.json({
       userId: updated.userId,
       name: updated.user.name,
@@ -82,6 +103,9 @@ export async function PATCH(request, { params }) {
       specialization: updated.user.specialization,
     });
   } catch (error) {
+    if (error instanceof MemberRuleError) {
+      return errorResponse(error.message, error.message === "Member not found." ? 404 : 400);
+    }
     logApiError("Member", "update", error);
     return errorResponse("Unable to update member.", 500);
   }
@@ -96,35 +120,41 @@ export async function DELETE(_request, { params }) {
   if (access.error) return errorResponse(access.error, access.status);
 
   try {
-    if (targetUserId === access.userId) {
-      const adminCount = await prisma.workspaceMember.count({
-        where: { workspaceId: id, role: "ADMIN" },
+    await prisma.$transaction(async (tx) => {
+      const membership = await tx.workspaceMember.findFirst({
+        where: { userId: targetUserId, workspaceId: id },
       });
-      if (adminCount <= 1) {
-        return errorResponse("Cannot remove yourself as the last admin.", 400);
+      if (!membership) throw new MemberRuleError("Member not found.");
+
+      if (membership.role === "ADMIN") {
+        const adminCount = await tx.workspaceMember.count({
+          where: { workspaceId: id, role: "ADMIN" },
+        });
+        if (adminCount <= 1) {
+          throw new MemberRuleError("Cannot remove the last admin.");
+        }
       }
-    }
 
-    const membership = await prisma.workspaceMember.findFirst({
-      where: { userId: targetUserId, workspaceId: id },
+      await tx.workspaceMember.delete({ where: { id: membership.id } });
+      await tx.task.updateMany({
+        where: { assigneeId: targetUserId, workspaceId: id },
+        data: { assigneeId: null },
+      });
+      await recordActivity(tx, {
+        workspaceId: id,
+        actorId: access.userId,
+        type: ACTIVITY_TYPES.MEMBER_REMOVED,
+        targetId: targetUserId,
+        targetType: "MEMBER",
+        metadata: { role: membership.role },
+      });
     });
-    if (!membership) return errorResponse("Member not found.", 404);
 
-    await prisma.workspaceMember.delete({ where: { id: membership.id } });
-    await prisma.task.updateMany({
-      where: { assigneeId: targetUserId, workspaceId: id },
-      data: { assigneeId: null },
-    });
-    await recordActivity(prisma, {
-      workspaceId: id,
-      actorId: access.userId,
-      type: ACTIVITY_TYPES.MEMBER_REMOVED,
-      targetId: targetUserId,
-      targetType: "MEMBER",
-      metadata: { role: membership.role },
-    });
     return Response.json({ removed: true });
   } catch (error) {
+    if (error instanceof MemberRuleError) {
+      return errorResponse(error.message, error.message === "Member not found." ? 404 : 400);
+    }
     logApiError("Member", "remove", error);
     return errorResponse("Unable to remove member. Please try again.", 500);
   }

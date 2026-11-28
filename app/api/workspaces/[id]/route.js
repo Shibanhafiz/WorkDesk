@@ -1,6 +1,7 @@
 import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { requireWorkspaceMember } from "@/app/lib/session";
+import { isJsonObjectBody } from "@/app/lib/requestBody";
 
 export async function GET(_request, { params }) {
   const { id } = await params;
@@ -37,12 +38,33 @@ export async function PATCH(request, { params }) {
     return errorResponse("Request body must be valid JSON.", 400);
   }
 
+  if (!isJsonObjectBody(body)) {
+    return errorResponse("Request body must be a JSON object.", 400);
+  }
+
+  const { name, description } = body;
+  if (
+    name !== undefined &&
+    (typeof name !== "string" || name.trim().length === 0 || name.trim().length > 100)
+  ) {
+    return errorResponse("Workspace name must be between 1 and 100 characters.", 400);
+  }
+  if (
+    description !== undefined &&
+    description !== null &&
+    (typeof description !== "string" || description.length > 1000)
+  ) {
+    return errorResponse("Workspace description is too long.", 400);
+  }
+  if (name === undefined && description === undefined) {
+    return errorResponse("No workspace changes were provided.", 400);
+  }
+
   try {
-    const { name, description } = body;
     const workspace = await prisma.workspace.update({
       where: { id },
       data: {
-        name: name !== undefined ? name : undefined,
+        name: name !== undefined ? name.trim() : undefined,
         description: description !== undefined ? description : undefined,
       },
     });
@@ -59,16 +81,26 @@ export async function DELETE(_request, { params }) {
   if (access.error) return errorResponse(access.error, access.status);
 
   try {
-    const projectCount = await prisma.project.count({ where: { workspaceId: id } });
-    if (projectCount > 0) {
-      return errorResponse(
-        "Cannot delete workspace with existing projects. Remove or reassign projects first.",
-        400,
-      );
-    }
-    await prisma.workspace.delete({ where: { id } });
-    await prisma.workspaceMember.deleteMany({ where: { workspaceId: id } });
-    return Response.json({ deleted: true });
+    const result = await prisma.$transaction(async (tx) => {
+      const [projectCount, taskCount] = await Promise.all([
+        tx.project.count({ where: { workspaceId: id } }),
+        tx.task.count({ where: { workspaceId: id } }),
+      ]);
+      if (projectCount > 0 || taskCount > 0) {
+        return {
+          error: "Remove or reassign all projects and tasks before deleting this workspace.",
+          status: 400,
+        };
+      }
+      await tx.user.updateMany({
+        where: { workspaceId: id },
+        data: { workspaceId: null },
+      });
+      await tx.workspace.delete({ where: { id } });
+      return { deleted: true };
+    });
+    if (result.error) return errorResponse(result.error, result.status);
+    return Response.json(result);
   } catch (error) {
     logApiError("Workspace", "delete", error);
     return errorResponse("Unable to delete workspace. Please try again.", 500);

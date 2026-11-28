@@ -2,7 +2,7 @@ import { prisma } from "@/app/lib/prisma";
 import { errorResponse, logApiError } from "@/app/lib/taskApiResponse";
 import { getSessionUser } from "@/app/lib/session";
 import { acceptWorkspaceInvitation } from "@/app/lib/invitationAcceptance";
-import { checkRateLimit, getClientKey } from "@/app/lib/rateLimit";
+import { checkRateLimit, envRateLimit, getClientKey } from "@/app/lib/rateLimit";
 
 /**
  * POST /api/invitations/accept — accept by token using the session user.
@@ -20,7 +20,7 @@ export async function POST(request) {
   }
 
   const rate = checkRateLimit(`invite-accept:${getClientKey(request)}`, {
-    limit: 10,
+    limit: envRateLimit("RATE_LIMIT_INVITE_ACCEPT_PER_HOUR", 10),
     windowMs: 60 * 60 * 1000,
   });
   if (!rate.allowed) {

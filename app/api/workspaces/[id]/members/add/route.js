@@ -5,6 +5,7 @@ import { hashPassword } from "@/app/lib/password";
 import { randomBytes } from "node:crypto";
 import { SPECIALIZATIONS } from "@/app/lib/workspacePermissions";
 import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
+import { isJsonObjectBody } from "@/app/lib/requestBody";
 
 const VALID_ROLES = ["ADMIN", "MANAGER", "MEMBER"];
 const VALID_SPECIALIZATIONS = new Set([
@@ -30,6 +31,9 @@ export async function POST(request, { params }) {
   } catch {
     return errorResponse("Request body must be valid JSON.", 400);
   }
+  if (!isJsonObjectBody(body)) {
+    return errorResponse("Request body must be a JSON object.", 400);
+  }
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -43,53 +47,62 @@ export async function POST(request, { params }) {
     return errorResponse("Invalid specialization.", 400);
   }
 
+  let temporaryPassword = null;
   try {
-    let user = await prisma.user.findUnique({ where: { email } });
-    let temporaryPassword = null;
+    const result = await prisma.$transaction(async (tx) => {
+      let user = await tx.user.findUnique({ where: { email } });
+      if (!user) {
+        temporaryPassword = randomBytes(9).toString("base64url").slice(0, 12) + "Aa1!";
+        user = await tx.user.create({
+          data: {
+            email,
+            name: email.split("@")[0],
+            passwordHash: await hashPassword(temporaryPassword),
+            role: "MEMBER",
+            specialization,
+          },
+        });
+      }
 
-    if (!user) {
-      temporaryPassword = randomBytes(9).toString("base64url").slice(0, 12) + "Aa1!";
-      user = await prisma.user.create({
-        data: {
-          email,
-          name: email.split("@")[0],
-          passwordHash: await hashPassword(temporaryPassword),
-          role: "MEMBER",
-          specialization,
-        },
+      const existing = await tx.workspaceMember.findFirst({
+        where: { userId: user.id, workspaceId: id },
       });
-    } else {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { specialization },
-      });
-    }
+      if (existing) {
+        return { duplicate: true };
+      }
 
-    const existing = await prisma.workspaceMember.findFirst({
-      where: { userId: user.id, workspaceId: id },
+      await tx.workspaceMember.create({
+        data: { userId: user.id, workspaceId: id, role },
+      });
+      if (user.specialization !== specialization) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { specialization },
+        });
+      }
+      await recordActivity(tx, {
+        workspaceId: id,
+        actorId: access.userId,
+        type: ACTIVITY_TYPES.MEMBER_JOINED,
+        targetId: user.id,
+        targetType: "MEMBER",
+        metadata: { email, role },
+      });
+
+      return {
+        user: { id: user.id, name: user.name, email: user.email },
+      };
     });
-    if (existing) {
+
+    if (result.duplicate) {
       return errorResponse("That user is already a member of this workspace.", 409);
     }
 
-    await prisma.workspaceMember.create({
-      data: { userId: user.id, workspaceId: id, role },
-    });
-
-    await recordActivity(prisma, {
-      workspaceId: id,
-      actorId: access.userId,
-      type: ACTIVITY_TYPES.MEMBER_JOINED,
-      targetId: user.id,
-      targetType: "MEMBER",
-      metadata: { email, role },
-    });
-
     return Response.json(
       {
-        userId: user.id,
-        name: user.name,
-        email: user.email,
+        userId: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
         role,
         specialization,
         temporaryPassword,
@@ -97,6 +110,9 @@ export async function POST(request, { params }) {
       { status: 201 },
     );
   } catch (error) {
+    if (error && typeof error === "object" && error.code === "P2002") {
+      return errorResponse("That user is already a member of this workspace.", 409);
+    }
     logApiError("Member", "add", error);
     return errorResponse("Unable to add member. Please try again.", 500);
   }

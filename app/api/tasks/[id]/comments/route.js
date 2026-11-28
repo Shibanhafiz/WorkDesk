@@ -53,34 +53,38 @@ export async function POST(request, { params }) {
   if (validation.error) return errorResponse(validation.error, 400);
 
   try {
-    const comment = await prisma.comment.create({
-      data: {
-        content: validation.data.content,
-        taskId: id,
-        authorId: access.userId,
-      },
-      include: includeAuthor,
-    });
+    const comment = await prisma.$transaction(async (tx) => {
+      const created = await tx.comment.create({
+        data: {
+          content: validation.data.content,
+          taskId: id,
+          authorId: access.userId,
+        },
+        include: includeAuthor,
+      });
 
-    await recordActivity(prisma, {
-      workspaceId: access.workspaceId,
-      actorId: access.userId,
-      type: ACTIVITY_TYPES.COMMENT_ADDED,
-      targetId: comment.id,
-      targetType: "COMMENT",
-      metadata: { taskId: id, taskTitle: access.task.title },
-    });
-
-    await createNotificationOnce(
-      prisma,
-      commentNotification({
-        recipientId: access.task.assigneeId,
+      await recordActivity(tx, {
+        workspaceId: access.workspaceId,
         actorId: access.userId,
-        taskTitle: access.task.title,
-        taskId: id,
-        commentId: comment.id,
-      }),
-    );
+        type: ACTIVITY_TYPES.COMMENT_ADDED,
+        targetId: created.id,
+        targetType: "COMMENT",
+        metadata: { taskId: id, taskTitle: access.task.title },
+      });
+
+      return created;
+    });
+
+    const notification = commentNotification({
+      recipientId: access.task.assigneeId,
+      actorId: access.userId,
+      taskTitle: access.task.title,
+      taskId: id,
+      commentId: comment.id,
+    });
+    if (notification) {
+      await createNotificationOnce(prisma, notification);
+    }
 
     return Response.json(serializeComment(comment), { status: 201 });
   } catch (error) {

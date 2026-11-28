@@ -72,6 +72,7 @@ export function buildNotificationRecord({
  * Skips self-notifications (no point notifying the actor).
  */
 export async function createNotification(prisma, input) {
+  if (!input || typeof input !== "object") return null;
   const built = buildNotificationRecord(input);
   if (built.error) {
     console.error(`[Notification] Skipped creating: ${built.error}`);

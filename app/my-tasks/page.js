@@ -46,7 +46,7 @@ export default function MyTasksPage() {
     isLoading,
     error,
     reloadTasks,
-  } = useTasks();
+  } = useTasks(null, { mine: true });
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");

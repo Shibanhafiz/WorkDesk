@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { getTodayDateKey } from "./taskInsights";
 
-async function fetchTasks(workspaceId = null) {
-  const url = workspaceId
-    ? `/api/tasks?workspaceId=${workspaceId}`
-    : "/api/tasks";
+async function fetchTasks(workspaceId = null, { mine = false, pageSize = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (workspaceId) params.set("workspaceId", workspaceId);
+  if (mine) params.set("mine", "true");
+  params.set("pageSize", String(pageSize));
+  const query = params.toString();
+  const url = query ? `/api/tasks?${query}` : "/api/tasks";
   const response = await fetch(url, { cache: "no-store" });
   const responseBody = await response.json().catch(() => null);
 
@@ -24,7 +27,7 @@ function getErrorMessage(error) {
   return error instanceof Error ? error.message : "Unable to load tasks.";
 }
 
-export function useTasks(workspaceId = null) {
+export function useTasks(workspaceId = null, { mine = false, pageSize = 50 } = {}) {
   const [tasks, setTasks] = useState([]);
   const [todayDateKey, setTodayDateKey] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,7 +38,7 @@ export function useTasks(workspaceId = null) {
     setError("");
 
     try {
-      const loadedTasks = await fetchTasks(workspaceId);
+      const loadedTasks = await fetchTasks(workspaceId, { mine, pageSize });
       setTasks(loadedTasks);
       setTodayDateKey(getTodayDateKey());
     } catch (loadError) {
@@ -43,12 +46,12 @@ export function useTasks(workspaceId = null) {
     } finally {
       setIsLoading(false);
     }
-  }, [workspaceId]);
+  }, [workspaceId, mine, pageSize]);
 
   useEffect(() => {
     let isMounted = true;
 
-    fetchTasks(workspaceId)
+    fetchTasks(workspaceId, { mine, pageSize })
       .then((loadedTasks) => {
         if (isMounted) {
           setTasks(loadedTasks);
@@ -69,7 +72,7 @@ export function useTasks(workspaceId = null) {
     return () => {
       isMounted = false;
     };
-  }, [workspaceId]);
+  }, [workspaceId, mine, pageSize]);
 
   return { tasks, todayDateKey, isLoading, error, reloadTasks };
 }

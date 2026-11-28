@@ -1,11 +1,24 @@
 const buckets = new Map();
 
+export function envRateLimit(name, fallback) {
+  const parsed = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function sanitizeIp(value) {
+  if (typeof value !== "string") return null;
+  const candidate = value.trim();
+  if (!/^[0-9a-fA-F:.]{3,45}$/.test(candidate)) return null;
+  return candidate;
+}
+
 export function getClientKey(request) {
+  if (process.env.TRUST_PROXY_HEADERS !== "true") return "unknown";
   const forwarded = request.headers
     .get("x-forwarded-for")
     ?.split(",")[0]
     ?.trim();
-  return forwarded || request.headers.get("x-real-ip") || "unknown";
+  return sanitizeIp(forwarded) ?? sanitizeIp(request.headers.get("x-real-ip")) ?? "unknown";
 }
 
 export function checkRateLimit(key, { limit, windowMs, now = Date.now() } = {}) {

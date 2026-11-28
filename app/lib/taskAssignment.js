@@ -62,6 +62,6 @@ export function canEditTask({ actorRole, actorId, taskAssigneeId, isSelfAssignme
   return (
     taskAssigneeId === actorId ||
     canManageWork(actorRole) ||
-    isSelfAssignment
+    (isSelfAssignment && taskAssigneeId == null)
   );
 }

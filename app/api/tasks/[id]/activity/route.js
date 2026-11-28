@@ -22,9 +22,13 @@ export async function GET(_request, { params }) {
     const activities = await prisma.activity.findMany({
       where: {
         workspaceId: access.workspaceId,
-        OR: [{ targetId: id }, { targetType: "TASK" }],
+        OR: [
+          { targetId: id },
+          { metadata: { contains: `"taskId":"${id}"` } },
+        ],
       },
       orderBy: { createdAt: "asc" },
+      take: 200,
       include: { actor: { select: { id: true, name: true, email: true } } },
     });
 

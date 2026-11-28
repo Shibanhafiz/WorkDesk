@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DUMMY_PASSWORD_HASH,
   hashPassword,
   verifyPassword,
   validateCredentialsInput,
   validateRegistrationInput,
   validateRememberFlag,
 } from "../app/lib/password.js";
-import { createSessionToken, SESSION_COOKIE } from "../app/lib/sessionToken.js";
+import {
+  createSessionToken,
+  hashSessionToken,
+  SESSION_COOKIE,
+} from "../app/lib/sessionToken.js";
 
 test("hashPassword and verifyPassword round-trip", async () => {
   const hash = await hashPassword("Testpass123!");
@@ -39,6 +44,10 @@ test("validateCredentialsInput validates email and password", () => {
 
   assert.ok(validateCredentialsInput({ email: "bad", password: "Testpass123!" }).error);
   assert.ok(validateCredentialsInput({ email: "a@b.com", password: "short" }).error);
+  assert.ok(validateCredentialsInput({
+    email: "a@b.com",
+    password: "x".repeat(201),
+  }).error);
 });
 
 test("validateRegistrationInput requires a name", () => {
@@ -59,6 +68,20 @@ test("createSessionToken is opaque and unique", () => {
   assert.strictEqual(token.length, 64);
   assert.notStrictEqual(token, createSessionToken());
   assert.strictEqual(SESSION_COOKIE, "workdesk_session");
+});
+
+test("session tokens are hashed before storage", () => {
+  const token = createSessionToken();
+  const hash = hashSessionToken(token);
+  assert.strictEqual(hash.length, 64);
+  assert.notStrictEqual(hash, token);
+  assert.strictEqual(hash, hashSessionToken(token));
+  assert.notStrictEqual(hash, hashSessionToken(createSessionToken()));
+});
+
+test("dummy password hash is verifiable for unknown accounts", async () => {
+  assert.strictEqual(await verifyPassword("workdesk-dummy-password", DUMMY_PASSWORD_HASH), true);
+  assert.strictEqual(await verifyPassword("anything-else", DUMMY_PASSWORD_HASH), false);
 });
 
 test("validateRememberFlag defaults to a short session", () => {

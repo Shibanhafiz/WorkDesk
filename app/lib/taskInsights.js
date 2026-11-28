@@ -1,3 +1,5 @@
+import { addDays, DUE_SOON_DAYS } from "./dueDateWindow.js";
+
 const priorityOrder = { LOW: 1, MEDIUM: 2, HIGH: 3 };
 
 export function getTodayDateKey(date = new Date()) {
@@ -63,14 +65,7 @@ export function groupTasksByDueDate(tasks, today) {
   const datedOpenTasks = tasks.filter(
     (task) => task.dueDate && task.status !== "DONE",
   );
-  const dueSoonThrough = today
-    ? new Date(`${today}T00:00:00`)
-    : null;
-
-  dueSoonThrough?.setDate(dueSoonThrough.getDate() + 7);
-  const dueSoonDateKey = dueSoonThrough
-    ? getTodayDateKey(dueSoonThrough)
-    : null;
+  const dueSoonDateKey = today ? addDays(today, DUE_SOON_DAYS) : null;
 
   return {
     overdue: today

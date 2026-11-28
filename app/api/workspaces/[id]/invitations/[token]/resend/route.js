@@ -13,52 +13,61 @@ export async function POST(_request, { params }) {
   if (access.error) return errorResponse(access.error, access.status);
 
   try {
-    const invitation = await prisma.invitation.findFirst({
-      where: { token, workspaceId: id },
-    });
-    if (!invitation) return errorResponse("Invitation not found.", 404);
-    if (invitation.acceptedAt) {
-      return errorResponse("An accepted invitation cannot be resent.", 400);
-    }
-
-    if (invitation.email) {
-      const duplicate = await prisma.invitation.findFirst({
-        where: {
-          workspaceId: id,
-          email: invitation.email,
-          id: { not: invitation.id },
-          acceptedAt: null,
-          rejectedAt: null,
-          expiresAt: { gt: new Date() },
-        },
+    const updated = await prisma.$transaction(async (tx) => {
+      const invitation = await tx.invitation.findFirst({
+        where: { token, workspaceId: id },
       });
-      if (duplicate) {
-        return errorResponse("An active invitation already exists for this email.", 409);
+      if (!invitation) return { error: "Invitation not found.", status: 404 };
+      if (invitation.acceptedAt) {
+        return { error: "An accepted invitation cannot be resent.", status: 400 };
       }
-    }
+      if (invitation.rejectedAt) {
+        return { error: "A declined invitation cannot be resent.", status: 400 };
+      }
 
-    const updated = await prisma.invitation.update({
-      where: { id: invitation.id },
-      data: {
-        token: generateInvitationToken(),
-        expiresAt: getDefaultExpiryDate(),
-        rejectedAt: null,
-      },
+      if (invitation.email) {
+        const duplicate = await tx.invitation.findFirst({
+          where: {
+            workspaceId: id,
+            email: invitation.email,
+            id: { not: invitation.id },
+            acceptedAt: null,
+            rejectedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        });
+        if (duplicate) {
+          return { error: "An active invitation already exists for this email.", status: 409 };
+        }
+      }
+
+      return {
+        invitation: await tx.invitation.update({
+          where: { id: invitation.id },
+          data: {
+            token: generateInvitationToken(),
+            expiresAt: getDefaultExpiryDate(),
+          },
+        }),
+      };
     });
+
+    if (updated.error) return errorResponse(updated.error, updated.status);
+    const invitation = updated.invitation;
 
     const webhookUrl = process.env.INVITATION_WEBHOOK_URL;
     let delivered = false;
-    if (webhookUrl && updated.email) {
+    if (webhookUrl && invitation.email) {
       try {
         const response = await fetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            email: updated.email,
-            token: updated.token,
-            role: updated.role,
+            email: invitation.email,
+            token: invitation.token,
+            role: invitation.role,
             workspaceId: id,
-            expiresAt: updated.expiresAt,
+            expiresAt: invitation.expiresAt,
           }),
         });
         delivered = response.ok;
@@ -71,17 +80,17 @@ export async function POST(_request, { params }) {
       workspaceId: id,
       actorId: access.userId,
       type: ACTIVITY_TYPES.INVITATION_SENT,
-      targetId: updated.id,
+      targetId: invitation.id,
       targetType: "INVITATION",
-      metadata: { email: updated.email, role: updated.role, resent: true },
+      metadata: { email: invitation.email, role: invitation.role, resent: true },
     });
 
     return Response.json({
-      id: updated.id,
-      token: updated.token,
-      email: updated.email,
-      role: updated.role,
-      expiresAt: updated.expiresAt,
+      id: invitation.id,
+      token: invitation.token,
+      email: invitation.email,
+      role: invitation.role,
+      expiresAt: invitation.expiresAt,
       delivered,
     });
   } catch (error) {

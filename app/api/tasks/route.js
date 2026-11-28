@@ -8,6 +8,20 @@ import {
   taskAssignmentNotification,
 } from "@/app/lib/notifications";
 import { recordActivity, ACTIVITY_TYPES } from "@/app/lib/activityLog";
+import { isJsonObjectBody } from "@/app/lib/requestBody";
+import { paginationHeaders, parsePagination } from "@/app/lib/pagination";
+import { isValidProjectId } from "@/app/lib/projectValidation";
+
+const TASK_STATUSES = new Set([
+  "TODO",
+  "IN_PROGRESS",
+  "TESTING",
+  "TESTING_FAILED",
+  "REOPENED",
+  "DONE",
+]);
+
+class DuplicateTaskError extends Error {}
 
 const taskInclude = {
   project: { select: { id: true, name: true, status: true } },
@@ -18,7 +32,8 @@ const taskInclude = {
     select: { id: true, name: true, email: true },
   },
   history: {
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
+    take: 50,
     include: { actor: { select: { id: true, name: true, email: true } } },
   },
 };
@@ -32,6 +47,7 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const requestedWorkspaceId = searchParams.get("workspaceId");
+  const { page, pageSize, skip, take } = parsePagination(searchParams);
 
   let workspaceIds;
   if (requestedWorkspaceId) {
@@ -46,15 +62,33 @@ export async function GET(request) {
     workspaceIds = memberships.map((m) => m.workspaceId);
   }
 
-  if (workspaceIds.length === 0) return Response.json([]);
+  if (workspaceIds.length === 0) {
+    return Response.json([], { headers: paginationHeaders(page, pageSize, 0) });
+  }
+
+  const where = { workspaceId: { in: workspaceIds } };
+  const status = searchParams.get("status");
+  if (status && TASK_STATUSES.has(status)) where.status = status;
+  const projectId = searchParams.get("projectId");
+  if (projectId && isValidProjectId(projectId)) where.projectId = projectId;
+  const assigneeId = searchParams.get("assigneeId");
+  if (assigneeId && typeof assigneeId === "string") where.assigneeId = assigneeId;
+  if (searchParams.get("mine") === "true") where.assigneeId = user.id;
 
   try {
-    const tasks = await prisma.task.findMany({
-      where: { workspaceId: { in: workspaceIds } },
-      orderBy: { createdAt: "desc" },
-      include: taskInclude,
+    const [tasks, total] = await Promise.all([
+      prisma.task.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take,
+        include: taskInclude,
+      }),
+      prisma.task.count({ where }),
+    ]);
+    return Response.json(tasks, {
+      headers: paginationHeaders(page, pageSize, total),
     });
-    return Response.json(tasks);
   } catch (error) {
     logTaskApiError("load", error);
     return errorResponse("Unable to load tasks. Please try again.", 500);
@@ -72,6 +106,9 @@ export async function POST(request) {
     return errorResponse("Request body must be valid JSON.", 400);
   }
 
+  if (!isJsonObjectBody(body)) {
+    return errorResponse("Request body must be a JSON object.", 400);
+  }
   if (Object.hasOwn(body, "status")) {
     return errorResponse("Status cannot be set directly. New tasks start in TODO.", 400);
   }
@@ -117,14 +154,33 @@ export async function POST(request) {
     });
     if (assignment.error) return errorResponse(assignment.error, 403);
 
-    const task = await prisma.task.create({
-      data: {
-        ...validation.data,
-        assigneeId: assignment.assigneeId,
-        workspaceId,
-        createdById: user.id,
-      },
-      include: taskInclude,
+    const { links = [], ...taskFields } = validation.data;
+    const task = await prisma.$transaction(async (tx) => {
+      const duplicate = await tx.task.findFirst({
+        where: {
+          workspaceId,
+          projectId: validation.data.projectId ?? null,
+          title: validation.data.title,
+        },
+        select: { id: true },
+      });
+      if (duplicate) throw new DuplicateTaskError();
+      return tx.task.create({
+        data: {
+          ...taskFields,
+          assigneeId: assignment.assigneeId,
+          workspaceId,
+          createdById: user.id,
+          ...(links.length > 0
+            ? {
+                links: {
+                  create: links.map((url) => ({ url, createdById: user.id })),
+                },
+              }
+            : {}),
+        },
+        include: taskInclude,
+      });
     });
 
     await recordActivity(prisma, {
@@ -161,6 +217,9 @@ export async function POST(request) {
 
     return Response.json(task, { status: 201 });
   } catch (error) {
+    if (error instanceof DuplicateTaskError) {
+      return errorResponse("A task with this title already exists in this project.", 409);
+    }
     logTaskApiError("create", error);
     return errorResponse("Unable to create task. Please try again.", 500);
   }
